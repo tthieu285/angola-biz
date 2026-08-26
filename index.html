@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Angola Market Entry · Financial Model — Year 1 Dropship</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="page-header">
+  <div class="header-inner">
+    <h1>Angola Market Entry · Financial Model</h1>
+    <p class="subtitle">B2C Dropship (phụ kiện công nghệ/điện thoại) · Year 1 · Mọi input đều chỉnh được · Cập nhật trực tiếp</p>
+  </div>
+</header>
+
+<main class="container">
+
+  <!-- Scenario tabs + Currency switcher -->
+  <section class="top-controls-row">
+    <div class="scenario-tabs" role="tablist" aria-label="Chọn kịch bản">
+      <button class="scenario-btn" data-scenario="conservative" role="tab">Conservative</button>
+      <button class="scenario-btn active" data-scenario="base" role="tab" aria-selected="true">Base Case</button>
+      <button class="scenario-btn" data-scenario="optimistic" role="tab">Optimistic</button>
+    </div>
+    <div class="currency-switcher" role="tablist" aria-label="Chọn đơn vị tiền tệ">
+      <button class="currency-btn active" data-currency="usd" role="tab" aria-selected="true">USD</button>
+      <button class="currency-btn" data-currency="vnd" role="tab">VND</button>
+      <button class="currency-btn" data-currency="aoa" role="tab">Kz (AOA)</button>
+    </div>
+  </section>
+
+  <!-- KPI cards -->
+  <section class="kpi-grid" id="kpiGrid"></section>
+
+  <!-- Funding need callout -->
+  <section class="funding-callout" id="fundingCallout"></section>
+
+  <!-- Charts -->
+  <section class="charts-grid">
+    <div class="chart-card">
+      <h3 id="chartRevenueEbitdaTitle">Doanh thu & EBITDA theo tháng</h3>
+      <div class="chart-legend">
+        <span><span class="dot" style="background:var(--series-1)"></span>Doanh thu</span>
+        <span><span class="dot" style="background:var(--series-2)"></span>EBITDA</span>
+      </div>
+      <div id="chartRevenueEbitda"></div>
+    </div>
+    <div class="chart-card">
+      <h3 id="chartMixTitle">Phân bổ chi phí (cả năm)</h3>
+      <div id="chartCostMix"></div>
+    </div>
+  </section>
+
+  <!-- Monthly P&L -->
+  <section class="table-card">
+    <h3>P&amp;L theo tháng</h3>
+    <div class="table-scroll">
+      <table id="monthlyTable">
+        <thead id="monthlyTableHead"></thead>
+        <tbody id="monthlyTableBody"></tbody>
+        <tfoot id="monthlyTableFoot"></tfoot>
+      </table>
+    </div>
+  </section>
+
+  <!-- Cumulative cash balance -->
+  <section class="chart-card chart-card-wide">
+    <h3>Dòng tiền luỹ kế (Cash Flow)</h3>
+    <div class="chart-legend">
+      <span><span class="dot" style="background:var(--series-1)"></span>Cash cuối tháng (có vốn góp)</span>
+      <span><span class="dot" style="background:var(--series-3)"></span>Cash cuối tháng (nếu KHÔNG góp vốn)</span>
+    </div>
+    <div id="chartCash"></div>
+  </section>
+
+  <!-- Balance Sheet -->
+  <section class="table-card">
+    <h3>Bảng cân đối kế toán theo tháng (Balance Sheet)</h3>
+    <p class="table-note">Model đơn giản: không khấu hao/lãi vay/thuế — Net income ≈ Net cash flow. Không có tồn kho (dropship) và không có khoản phải thu (khách trả trước), nên Tài sản = Tiền mặt.</p>
+    <div class="table-scroll">
+      <table id="balanceSheetTable">
+        <thead id="balanceSheetHead"></thead>
+        <tbody id="balanceSheetBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Assumptions (tất cả input — nằm cuối trang) -->
+  <section class="assumptions-panel">
+    <div class="assumptions-header-row">
+      <button class="assumptions-toggle" id="assumptionsToggle" aria-expanded="false">
+        <span class="chevron">▶</span> Assumptions
+      </button>
+      <button class="reset-btn" id="resetDefaultsBtn" type="button">↺ Reset về mặc định</button>
+    </div>
+    <div class="assumptions-body" id="assumptionsBody" style="display:none;">
+
+      <!-- A. Volume & growth -->
+      <div class="assump-block">
+        <h3>A. Volume & Tăng trưởng</h3>
+        <div class="field-grid">
+          <div class="field">
+            <label for="baselineOrdersPerDay">Baseline đơn/ngày (Tháng 2 — mốc validate)</label>
+            <input type="number" id="baselineOrdersPerDay" step="1">
+            <span class="field-note">Tháng 1 luôn = 0 đơn (tháng dựng hạ tầng: đăng ký công ty, mở tài khoản, dựng site).</span>
+          </div>
+          <div class="field">
+            <label for="monthlyGrowthPct">Tăng trưởng mỗi tháng (%), Tháng 3-12</label>
+            <input type="number" id="monthlyGrowthPct" step="0.01">
+            <span class="field-note">Mặc định 25,89%/tháng để chạm đúng 200 đơn/ngày vào Tháng 12 từ baseline 20.</span>
+          </div>
+        </div>
+        <div class="rev-boxes" id="volumeBoxes"></div>
+      </div>
+
+      <!-- B. Revenue per order -->
+      <div class="assump-block">
+        <h3>B. Doanh thu mỗi đơn</h3>
+        <div class="field-grid">
+          <div class="field">
+            <label for="aov">Giá trị đơn hàng trung bình — AOV ($)</label>
+            <input type="number" id="aov" step="0.5">
+          </div>
+        </div>
+      </div>
+
+      <!-- C. Variable cost rates -->
+      <div class="assump-block">
+        <h3>C. Chi phí biến đổi (% doanh thu)</h3>
+        <div class="field-grid">
+          <div class="field">
+            <label for="cogsPct">Giá vốn hàng bán — COGS (%)</label>
+            <input type="number" id="cogsPct" step="0.5">
+            <span class="field-note">Đã gồm giá sản phẩm + ship từ Trung Quốc + thuế nhập khẩu (all-in, theo anh Hiếu xác nhận).</span>
+          </div>
+          <div class="field">
+            <label for="adsPct">Ngân sách quảng cáo — Ads (%)</label>
+            <input type="number" id="adsPct" step="0.5">
+          </div>
+          <div class="field">
+            <label for="paymentFeePct">Phí thanh toán (GPayGo + FX markup, %)</label>
+            <input type="number" id="paymentFeePct" step="0.1">
+            <span class="field-note">Ước tính tham khảo thị trường Angola (2,5-4% phí giao dịch + phụ phí FX) — GPayGo chưa công bố biểu phí chính thức.</span>
+          </div>
+          <div class="field">
+            <label for="returnsPct">Tỷ lệ hoàn/huỷ đơn (%)</label>
+            <input type="number" id="returnsPct" step="0.5">
+            <span class="field-note">Mặc định 0% — khách thanh toán trước rồi mới ship, theo xác nhận của anh Hiếu.</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- D. Fixed overhead -->
+      <div class="assump-block">
+        <h3>D. Chi phí cố định hàng tháng</h3>
+        <table class="dyn-table" id="fixedOverheadTable">
+          <thead>
+            <tr>
+              <th>Khoản mục</th>
+              <th class="col-amount">$/tháng</th>
+              <th class="col-remove"></th>
+            </tr>
+          </thead>
+          <tbody id="fixedOverheadRows"></tbody>
+        </table>
+        <button class="add-row-btn" id="addFixedOverheadRow" type="button">+ Thêm khoản mục</button>
+        <div class="mix-total-row">Tổng chi phí cố định/tháng: <span id="fixedTotalDisplay">—</span></div>
+      </div>
+
+      <!-- E. One-time setup costs -->
+      <div class="assump-block">
+        <h3>E. Chi phí thiết lập một lần (Khâu 2 — pháp nhân/ngân hàng Angola)</h3>
+        <table class="dyn-table" id="oneTimeSetupTable">
+          <thead>
+            <tr>
+              <th>Khoản mục</th>
+              <th class="col-amount">Số tiền ($)</th>
+              <th class="col-month">Tháng #</th>
+              <th class="col-remove"></th>
+            </tr>
+          </thead>
+          <tbody id="oneTimeSetupRows"></tbody>
+        </table>
+        <button class="add-row-btn" id="addOneTimeSetupRow" type="button">+ Thêm khoản mục</button>
+        <span class="field-note">Số liệu ước tính từ nghiên cứu chi phí thành lập doanh nghiệp nhỏ tại Angola (INAPEM, công chứng, mở tài khoản) — Tùng xác nhận lại số thực tế sau.</span>
+        <div class="mix-total-row">Tổng chi phí thiết lập một lần: <span id="oneTimeTotalDisplay">—</span></div>
+      </div>
+
+      <!-- F. Headcount -->
+      <div class="assump-block">
+        <h3>F. Nhân sự (lương/thù lao cố định)</h3>
+        <table class="dyn-table" id="headcountTable">
+          <thead>
+            <tr>
+              <th>Vai trò</th>
+              <th class="col-count">Số lượng</th>
+              <th class="col-rate">$/tháng</th>
+              <th class="col-remove"></th>
+            </tr>
+          </thead>
+          <tbody id="headcountRows"></tbody>
+        </table>
+        <button class="add-row-btn" id="addHeadcountRow" type="button">+ Thêm vai trò</button>
+        <span class="field-note">Mặc định RỖNG — Year 1 anh Hiếu và Tùng không nhận lương cố định, chỉ chia lợi nhuận cuối kỳ theo cổ phần (xem mục G). Thêm dòng ở đây nếu sau này cần thuê ngoài (CSKH, quản lý ads...).</span>
+        <div class="mix-total-row">Tổng chi phí nhân sự/tháng: <span id="headcountTotalDisplay">—</span></div>
+      </div>
+
+      <!-- G. Capital -->
+      <div class="assump-block">
+        <h3>G. Vốn & Cổ phần</h3>
+        <div class="field-grid">
+          <div class="field">
+            <label for="totalInvestment">Vốn góp ban đầu đưa vào model ($)</label>
+            <input type="number" id="totalInvestment" step="100">
+            <span class="field-note">Mặc định $1.500 — đủ trang trải điểm âm tiền mặt thấp nhất (~$900 ở Tháng 1) cộng đệm an toàn. Xem KPI "Nhu cầu vốn thực tế" phía trên để so với trần $10k.</span>
+          </div>
+          <div class="field">
+            <label for="maxAvailable">Trần vốn tối đa 2 người sẵn sàng góp ($)</label>
+            <input type="number" id="maxAvailable" step="500">
+          </div>
+          <div class="field">
+            <label for="founderSplitHieuPct">Tỷ lệ cổ phần — anh Hiếu (%)</label>
+            <input type="number" id="founderSplitHieuPct" step="1">
+          </div>
+          <div class="field">
+            <label for="founderSplitTungPct">Tỷ lệ cổ phần — Tùng (%)</label>
+            <input type="number" id="founderSplitTungPct" step="1">
+          </div>
+        </div>
+        <span class="field-note">Tỷ lệ 50/50 là tạm thời, anh Hiếu xác nhận sẽ cần điều chỉnh lại sau. Year 2 trở đi (ngoài scope model này) dự kiến có các vòng gọi vốn pha loãng dần.</span>
+      </div>
+
+      <!-- H. Scenario -->
+      <div class="assump-block">
+        <h3>H. Điều chỉnh kịch bản (áp lên volume đơn hàng)</h3>
+        <div class="field-grid">
+          <div class="field">
+            <label for="conservativeAdj">Conservative (%)</label>
+            <input type="number" id="conservativeAdj" step="1">
+          </div>
+          <div class="field">
+            <label for="optimisticAdj">Optimistic (%)</label>
+            <input type="number" id="optimisticAdj" step="1">
+          </div>
+        </div>
+        <span class="field-note">Áp dụng lên đơn/ngày mỗi tháng (kể cả baseline Tháng 2) — giá bán, % chi phí, chi phí cố định giữ nguyên ở cả 3 kịch bản.</span>
+      </div>
+
+      <!-- I. Currency / FX -->
+      <div class="assump-block">
+        <h3>I. Tỷ giá quy đổi</h3>
+        <div class="field-grid">
+          <div class="field">
+            <label for="usdToVnd">1 USD = ? VND</label>
+            <input type="number" id="usdToVnd" step="1">
+          </div>
+          <div class="field">
+            <label for="usdToAoa">1 USD = ? Kz (AOA)</label>
+            <input type="number" id="usdToAoa" step="0.1">
+          </div>
+        </div>
+        <span class="field-note">Toàn bộ tính toán nội bộ bằng USD — tỷ giá chỉ dùng để hiển thị. Mặc định lấy tỷ giá tham khảo ngày 26/8/2026, anh cập nhật lại khi cần số mới nhất.</span>
+      </div>
+
+      <!-- J. Admin — Save as Default -->
+      <div class="assump-block">
+        <h3>J. Admin — Save as Default</h3>
+
+        <div id="adminLockedView">
+          <span class="field-note">Khoá bằng PIN (chỉ là rào cản nhẹ — xem ghi chú bên dưới). Nhập PIN để hiện điều khiển lưu lên GitHub.</span>
+          <div class="field-grid" style="margin-top:10px;">
+            <div class="field">
+              <label for="adminPinInput">Admin PIN</label>
+              <input type="password" id="adminPinInput" inputmode="numeric" autocomplete="off">
+            </div>
+          </div>
+          <button class="add-row-btn" id="adminUnlockBtn" type="button" style="margin-top:10px;">Unlock Admin</button>
+          <div class="admin-status" id="adminUnlockStatus"></div>
+        </div>
+
+        <div id="adminUnlockedView" style="display:none;">
+          <span class="field-note">Lưu sẽ ghi toàn bộ giá trị input hiện tại trên trang thành default mới, bằng cách commit thẳng file <code>script.js</code> lên GitHub repo của anh.</span>
+          <div class="field-grid" style="margin-top:10px;">
+            <div class="field">
+              <label for="adminOwner">GitHub owner/org</label>
+              <input type="text" id="adminOwner" autocomplete="off" placeholder="vd: tthieu285">
+            </div>
+            <div class="field">
+              <label for="adminRepo">Repository</label>
+              <input type="text" id="adminRepo" autocomplete="off" placeholder="vd: financial-model-angola">
+            </div>
+            <div class="field">
+              <label for="adminBranch">Branch</label>
+              <input type="text" id="adminBranch" autocomplete="off" placeholder="main">
+            </div>
+            <div class="field">
+              <label for="adminPath">File path</label>
+              <input type="text" id="adminPath" autocomplete="off" placeholder="script.js">
+            </div>
+          </div>
+          <div class="field-grid" style="margin-top:10px;">
+            <div class="field" style="grid-column: 1 / -1;">
+              <label for="adminPat">GitHub Personal Access Token</label>
+              <input type="password" id="adminPat" autocomplete="off" placeholder="ghp_… hoặc github_pat_…">
+              <span class="field-note">Gửi trực tiếp từ trình duyệt anh đến GitHub API — không lưu lại, không gửi đi đâu khác. Nên dùng fine-grained PAT chỉ scope đúng 1 repo này (Contents: Read/write).</span>
+            </div>
+          </div>
+          <div style="margin-top:10px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+            <button class="add-row-btn" id="adminSaveBtn" type="button">Save as Default</button>
+            <button class="reset-btn" id="adminLockBtn" type="button">Lock Admin</button>
+          </div>
+          <div class="admin-status" id="adminSaveStatus"></div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <footer class="page-footer">
+    <p>
+      Model Year 1 (dropship) cho dự án thâm nhập thị trường Angola — dựng theo đúng phong cách/kỹ thuật các model
+      "God's Eyes" trước đây (xem <a href="https://github.com/tthieu285/financial-model-b2c" target="_blank" rel="noopener">financial-model-b2c</a>).
+      Year 2 (nhập hàng/tồn kho, website làm kênh chủ lực) ngoài phạm vi bản này.<br>
+      Các số ước tính (chi phí thiết lập công ty Angola, phí thanh toán GPayGo, thời gian ship, thuế nhập khẩu) đến từ
+      research thị trường chung, KHÔNG phải báo giá chính thức — cần Tùng xác nhận số thực tế khi có.
+    </p>
+  </footer>
+
+</main>
+
+<script src="script.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

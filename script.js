@@ -1,0 +1,188 @@
+/* ============================================================================
+   Angola Market Entry · Financial Model — B2C Dropship (Year 1)
+   Phong cách/kiến trúc dựa trên financial-model-b2c (God's Eyes), cùng tác giả:
+   https://github.com/tthieu285/financial-model-b2c
+   Toàn bộ engine tính toán + rendering + tương tác nằm trong file này + app.js.
+   Mọi input trên trang đều free-edit — không có ô nào bị khoá/tự suy ra từ ô khác.
+
+   MODEL HORIZON: 1 năm / 12 tháng (Year 1 — mô hình DROPSHIP test thị trường).
+   Year 2 (nhập hàng/tồn kho, website làm kênh chủ lực) NGOÀI SCOPE bản này.
+
+   Tháng 1 = tháng dựng hạ tầng (đăng ký công ty tại Angola, mở tài khoản ngân
+   hàng, dựng site WooCommerce + GPayGo, test sản phẩm) — mặc định 0 đơn hàng.
+   Tháng 2 = mốc validate đầu tiên (đơn/ngày = baselineOrdersPerDay).
+   Tháng 3-12 = tăng trưởng theo bậc mỗi tháng (monthlyGrowthPct), mặc định để
+   đạt đúng mốc 200 đơn/ngày vào tháng 12 (~25,89%/tháng từ baseline 20 đơn/ngày).
+   ============================================================================ */
+
+/* ---------------------------------------------------------------------------
+   0. ADMIN CONFIG — cho công cụ "Save as Default" trong mục Admin.
+   PIN chỉ là rào cản nhẹ (site tĩnh, ai cũng xem được source), KHÔNG phải bảo
+   mật thật. Đổi trước khi deploy nếu muốn PIN khác.
+   --------------------------------------------------------------------------- */
+const ADMIN_CONFIG = {
+  pin: "2468"
+};
+
+const MONTHS_PER_YEAR = 12;
+const DAYS_PER_MONTH = 30; // giả định chung, không neo theo lịch thật
+
+/* ---------------------------------------------------------------------------
+   1. DEFAULT ASSUMPTIONS — chốt qua phỏng vấn trực tiếp với anh Hiếu (26/8/2026)
+   --------------------------------------------------------------------------- */
+/* === DEFAULTS:START — sẽ được ghi đè lại mỗi khi dùng công cụ "Save as
+   Default" trong mục Admin. Sửa tay ở đây vẫn được, nhưng lần Save tiếp theo
+   sẽ ghi đè lại toàn bộ object này. === */
+const DEFAULTS = {
+  "fx": {
+    "usdToVnd": 26098,
+    "usdToAoa": 916.1
+  },
+  "volume": {
+    "baselineOrdersPerDay": 20,
+    "monthlyGrowthPct": 25.89
+  },
+  "revenue": {
+    "aov": 30
+  },
+  "costRates": {
+    "cogsPct": 25,
+    "adsPct": 35,
+    "paymentFeePct": 4,
+    "returnsPct": 0
+  },
+  "fixedOverhead": [
+    { "label": "VPS hosting (WooCommerce)", "amount": 35 },
+    { "label": "Công cụ/subscription khác (email, analytics...)", "amount": 0 }
+  ],
+  "oneTimeSetup": [
+    { "label": "Đăng ký công ty tại Angola (INAPEM, pháp lý, công chứng)", "amount": 750, "month": 1 },
+    { "label": "Mở tài khoản ngân hàng doanh nghiệp Angola", "amount": 100, "month": 1 },
+    { "label": "Domain (.com / .co.ao, 1 năm)", "amount": 15, "month": 1 }
+  ],
+  "headcount": [],
+  "capital": {
+    "totalInvestment": 1500,
+    "maxAvailable": 10000,
+    "founderSplitHieuPct": 50,
+    "founderSplitTungPct": 50
+  },
+  "scenario": {
+    "conservativeAdj": -50,
+    "optimisticAdj": 50
+  }
+};
+/* === DEFAULTS:END === */
+
+/* Deep clone helper (tránh phụ thuộc structuredClone trên trình duyệt cũ) */
+function deepClone(obj) {
+  return JSON.parse(JSON.stringify(obj));
+}
+
+let state = deepClone(DEFAULTS);
+let currentScenario = "base"; // 'conservative' | 'base' | 'optimistic'
+let currentCurrency = "usd"; // 'usd' | 'vnd' | 'aoa'
+
+/* ---------------------------------------------------------------------------
+   2. CALCULATION ENGINE
+   --------------------------------------------------------------------------- */
+function scenarioAdjustment(s, scenarioKey) {
+  if (scenarioKey === "conservative") return s.scenario.conservativeAdj / 100;
+  if (scenarioKey === "optimistic") return s.scenario.optimisticAdj / 100;
+  return 0;
+}
+
+/* Đơn/ngày RAW (trước điều chỉnh kịch bản) cho 1 tháng tuyệt đối (1-12).
+   Tháng 1 luôn = 0 (tháng dựng hạ tầng, không phụ thuộc scenario/growth).
+   Tháng 2 = baseline. Tháng 3-12 = baseline x (1+growth)^(m-2), bậc thang theo tháng. */
+function computeRawOrdersPerDay(s, month) {
+  if (month <= 1) return 0;
+  const base = Number(s.volume.baselineOrdersPerDay || 0);
+  const g = Number(s.volume.monthlyGrowthPct || 0) / 100;
+  return base * Math.pow(1 + g, month - 2);
+}
+
+function calcModel(s, scenarioKey) {
+  const adj = scenarioAdjustment(s, scenarioKey);
+  const fixedOverheadMonthly = s.fixedOverhead.reduce((sum, r) => sum + Number(r.amount || 0), 0);
+  const headcountMonthly = s.headcount.reduce((sum, r) => sum + Number(r.count || 0) * Number(r.monthlyRate || 0), 0);
+
+  const months = [];
+  let cashBalance = 0;
+  let cashBalanceNoFunding = 0; // dòng tiền nếu KHÔNG góp vốn ban đầu — để lộ ra nhu cầu vốn thật
+  let minCashNoFunding = 0;
+  let minCashNoFundingMonth = 0;
+  let cumulativeNetIncome = 0;
+
+  for (let m = 1; m <= MONTHS_PER_YEAR; m++) {
+    const rawOpd = computeRawOrdersPerDay(s, m);
+    // Đơn/ngày luôn là số nguyên (đếm đơn hàng thật) — làm tròn 1 lần ở đây.
+    const ordersPerDay = m <= 1 ? 0 : Math.max(0, Math.round(rawOpd * (1 + adj)));
+    const orders = ordersPerDay * DAYS_PER_MONTH;
+    const revenue = orders * Number(s.revenue.aov || 0);
+
+    const cogs = revenue * Number(s.costRates.cogsPct || 0) / 100;
+    const ads = revenue * Number(s.costRates.adsPct || 0) / 100;
+    const paymentFee = revenue * Number(s.costRates.paymentFeePct || 0) / 100;
+    const returns = revenue * Number(s.costRates.returnsPct || 0) / 100;
+    const variableCost = cogs + ads + paymentFee + returns;
+    const grossProfit = revenue - variableCost;
+
+    const oneTimeSetup = s.oneTimeSetup.reduce((sum, item) => sum + (Number(item.month) === m ? Number(item.amount || 0) : 0), 0);
+
+    const ebitda = grossProfit - fixedOverheadMonthly - headcountMonthly;
+    const netCashFlow = ebitda - oneTimeSetup;
+
+    cashBalance = (m === 1 ? Number(s.capital.totalInvestment || 0) : cashBalance) + netCashFlow;
+    cashBalanceNoFunding = cashBalanceNoFunding + netCashFlow;
+    if (cashBalanceNoFunding < minCashNoFunding) {
+      minCashNoFunding = cashBalanceNoFunding;
+      minCashNoFundingMonth = m;
+    }
+    cumulativeNetIncome += netCashFlow; // model đơn giản: không D&A/lãi vay/thuế -> net income = net cash flow
+
+    const paidInCapital = Number(s.capital.totalInvestment || 0);
+    const retainedEarnings = cumulativeNetIncome;
+    const totalEquity = paidInCapital + retainedEarnings;
+    const totalLiabilities = 0;
+    const totalAssets = cashBalance; // chỉ có tiền mặt — không tồn kho (dropship), không AR (khách trả trước)
+
+    months.push({
+      m, ordersPerDay, orders, revenue, cogs, ads, paymentFee, returns, variableCost, grossProfit,
+      fixedOverheadMonthly, headcountMonthly, oneTimeSetup, ebitda, netCashFlow, cashBalance,
+      cashBalanceNoFunding, paidInCapital, retainedEarnings, totalEquity, totalLiabilities, totalAssets
+    });
+  }
+
+  function aggregate(monthsSlice) {
+    const acc = monthsSlice.reduce((a, mo) => {
+      a.orders += mo.orders;
+      a.revenue += mo.revenue;
+      a.cogs += mo.cogs;
+      a.ads += mo.ads;
+      a.paymentFee += mo.paymentFee;
+      a.returns += mo.returns;
+      a.variableCost += mo.variableCost;
+      a.grossProfit += mo.grossProfit;
+      a.fixedOverheadMonthly += mo.fixedOverheadMonthly;
+      a.headcountMonthly += mo.headcountMonthly;
+      a.oneTimeSetup += mo.oneTimeSetup;
+      a.ebitda += mo.ebitda;
+      a.netCashFlow += mo.netCashFlow;
+      return a;
+    }, { orders: 0, revenue: 0, cogs: 0, ads: 0, paymentFee: 0, returns: 0, variableCost: 0, grossProfit: 0, fixedOverheadMonthly: 0, headcountMonthly: 0, oneTimeSetup: 0, ebitda: 0, netCashFlow: 0 });
+    acc.endingCash = monthsSlice[monthsSlice.length - 1].cashBalance;
+    acc.ebitdaMargin = acc.revenue !== 0 ? acc.ebitda / acc.revenue : 0;
+    return acc;
+  }
+
+  const total = aggregate(months);
+
+  return {
+    months, total, minCashNoFunding, minCashNoFundingMonth,
+    endOrdersPerDay: months[months.length - 1].ordersPerDay
+  };
+}
+
+/* Expose for console debugging / cross-check */
+window.__angolaModel = { DEFAULTS, calcModel };
