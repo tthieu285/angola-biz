@@ -95,10 +95,8 @@ const SIMPLE_FIELDS = [
   { id: "adsPct", path: "costRates.adsPct" },
   { id: "paymentFeePct", path: "costRates.paymentFeePct" },
   { id: "returnsPct", path: "costRates.returnsPct" },
-  { id: "totalInvestment", path: "capital.totalInvestment" },
+  { id: "cashConversionDays", path: "capital.cashConversionDays" },
   { id: "maxAvailable", path: "capital.maxAvailable" },
-  { id: "founderSplitHieuPct", path: "capital.founderSplitHieuPct" },
-  { id: "founderSplitTungPct", path: "capital.founderSplitTungPct" },
   { id: "conservativeAdj", path: "scenario.conservativeAdj" },
   { id: "optimisticAdj", path: "scenario.optimisticAdj" },
   { id: "usdToVnd", path: "fx.usdToVnd" },
@@ -165,10 +163,24 @@ function renderHeadcountRows() {
   `).join("");
 }
 
+function renderShareholderRows() {
+  const tbody = document.getElementById("shareholderRows");
+  if (!tbody) return;
+  tbody.innerHTML = state.capital.shareholders.map((row, i) => `
+    <tr>
+      <td><input type="text" data-list="shareholders" data-index="${i}" data-field="name" value="${escapeHtml(row.name)}"></td>
+      <td class="col-amount"><input type="number" step="50" data-list="shareholders" data-index="${i}" data-field="contribution" value="${roundForInput(row.contribution)}"></td>
+      <td class="col-count"><input type="number" step="1" data-list="shareholders" data-index="${i}" data-field="equityPct" value="${roundForInput(row.equityPct)}"></td>
+      <td class="col-remove"><button class="row-remove-btn" data-remove="shareholders" data-index="${i}" type="button" title="Xoá dòng">✕</button></td>
+    </tr>
+  `).join("");
+}
+
 function listArrayFor(list) {
   if (list === "fixedOverhead") return state.fixedOverhead;
   if (list === "oneTimeSetup") return state.oneTimeSetup;
   if (list === "headcount") return state.headcount;
+  if (list === "shareholders") return state.capital.shareholders;
   return null;
 }
 
@@ -206,6 +218,7 @@ function bindDynamicTableEvents() {
     if (list === "fixedOverhead") renderFixedOverheadRows();
     else if (list === "oneTimeSetup") renderOneTimeSetupRows();
     else if (list === "headcount") renderHeadcountRows();
+    else if (list === "shareholders") renderShareholderRows();
     recalcAndRender();
   });
 
@@ -224,6 +237,11 @@ function bindDynamicTableEvents() {
     renderHeadcountRows();
     recalcAndRender();
   });
+  document.getElementById("addShareholderRow").addEventListener("click", () => {
+    state.capital.shareholders.push({ name: "Cổ đông mới", contribution: 0, equityPct: 0 });
+    renderShareholderRows();
+    recalcAndRender();
+  });
 }
 
 /* ---------------------------------------------------------------------------
@@ -240,6 +258,16 @@ function updateOneTimeTotalDisplay() {
 function updateHeadcountTotalDisplay() {
   const total = state.headcount.reduce((s, r) => s + Number(r.count || 0) * Number(r.monthlyRate || 0), 0);
   document.getElementById("headcountTotalDisplay").textContent = formatMoney(total) + "/tháng";
+}
+function updateShareholderTotalsDisplay() {
+  const el = document.getElementById("shareholderTotalRow");
+  if (!el) return;
+  const shareholders = state.capital.shareholders;
+  const totalContribution = shareholders.reduce((s, r) => s + Number(r.contribution || 0), 0);
+  const totalEquityPct = shareholders.reduce((s, r) => s + Number(r.equityPct || 0), 0);
+  const ok = Math.abs(totalEquityPct - 100) < 0.5;
+  el.textContent = `Tổng vốn góp: ${formatMoney(totalContribution)} — Tổng tỷ lệ cổ phần: ${totalEquityPct.toFixed(1)}% ${ok ? "✓ (đủ 100%)" : "⚠ phải bằng 100%"}`;
+  el.className = "mix-total-row" + (ok ? "" : " warn");
 }
 
 function renderVolumeBoxes(model) {
@@ -291,7 +319,7 @@ function renderKPIs(model) {
     <div class="kpi-card">
       <div class="kpi-label">Tiền mặt cuối Năm 1</div>
       <div class="kpi-value ${lastMonth.cashBalance >= 0 ? "positive" : "negative"}">${formatMoney(lastMonth.cashBalance)}</div>
-      <div class="kpi-sub">Sau khi góp ${formatMoney(Number(state.capital.totalInvestment || 0))} vốn ban đầu</div>
+      <div class="kpi-sub">Sau khi góp ${formatMoney(model.totalInvestment)} vốn ban đầu</div>
     </div>
   `;
 }
@@ -304,29 +332,32 @@ function renderFundingCallout(model) {
   const el = document.getElementById("fundingCallout");
   if (!el) return;
   const needed = Math.max(0, -model.minCashNoFunding);
-  const invested = Number(state.capital.totalInvestment || 0);
+  const invested = model.totalInvestment;
   const ceiling = Number(state.capital.maxAvailable || 0);
   const sufficient = invested >= needed;
+  const delayLabel = model.delayMonths === 0
+    ? "không có độ trễ chuyển tiền"
+    : `độ trễ chuyển tiền ~${model.delayMonths} tháng (từ ${fmtNum(Number(state.capital.cashConversionDays || 0), 0)} ngày)`;
   el.innerHTML = `
     <div class="funding-grid">
       <div class="funding-metric">
         <div class="label">Nhu cầu vốn thực tế (nếu KHÔNG góp vốn trước)</div>
         <div class="value ${needed > 0 ? "negative" : ""}">${formatMoney(needed)}</div>
-        <div class="sub">Điểm âm sâu nhất — Tháng ${model.minCashNoFundingMonth || 1} (kịch bản hiện tại)</div>
+        <div class="sub">Điểm âm sâu nhất — Tháng ${model.minCashNoFundingMonth || 1} (kịch bản hiện tại, đã tính ${delayLabel})</div>
       </div>
       <div class="funding-metric">
-        <div class="label">Vốn góp đang đưa vào model</div>
+        <div class="label">Vốn góp đang đưa vào model (tổng các cổ đông)</div>
         <div class="value">${formatMoney(invested)}</div>
       </div>
       <div class="funding-metric">
-        <div class="label">Trần vốn tối đa 2 người sẵn sàng góp</div>
+        <div class="label">Trần vốn tối đa cả nhóm sẵn sàng góp</div>
         <div class="value">${formatMoney(ceiling)}</div>
       </div>
     </div>
     <div class="funding-note ${sufficient ? "ok" : "warn"}">
       ${sufficient
-        ? `✓ Vốn góp ${formatMoney(invested)} đã đủ trang trải điểm âm tiền mặt thấp nhất (${formatMoney(needed)}) — KHÔNG cần huy động đến trần ${formatMoney(ceiling)}.`
-        : `⚠ Vốn góp ${formatMoney(invested)} CHƯA đủ trang trải điểm âm tiền mặt thấp nhất (${formatMoney(needed)}) — cần góp thêm hoặc giảm chi tiêu đầu kỳ.`}
+        ? `✓ Vốn góp ${formatMoney(invested)} đã đủ trang trải điểm âm tiền mặt thấp nhất (${formatMoney(needed)}, đã tính ${delayLabel}) — KHÔNG cần huy động đến trần ${formatMoney(ceiling)}.`
+        : `⚠ Vốn góp ${formatMoney(invested)} CHƯA đủ trang trải điểm âm tiền mặt thấp nhất (${formatMoney(needed)}, đã tính ${delayLabel}) — cần góp thêm hoặc giảm chi tiêu đầu kỳ.`}
     </div>
   `;
 }
@@ -347,8 +378,11 @@ const TABLE_ROWS = [
   { key: "headcountMonthly", label: "Nhân sự", fmt: "money" },
   { key: "ebitda", label: "EBITDA", fmt: "money", signed: true, bold: true },
   { key: "oneTimeSetup", label: "Chi phí thiết lập một lần", fmt: "money" },
-  { key: "netCashFlow", label: "Dòng tiền ròng (Net Cash Flow)", fmt: "money", signed: true },
-  { key: "cashBalance", label: "Tiền mặt luỹ kế (có vốn góp)", fmt: "money", bold: true, signed: true, isEnding: true }
+  { key: "accrualNetIncome", label: "Lợi nhuận ròng (dồn tích, không tính độ trễ)", fmt: "money", signed: true, bold: true },
+  { key: "usableRevenueCash", label: "Tiền về TK chung, dùng được (đã trừ độ trễ)", fmt: "money", sub: true },
+  { key: "cashOutflow", label: "Tổng chi tiền mặt trong tháng", fmt: "money", sub: true },
+  { key: "netCashMovement", label: "Dòng tiền thực tế trong tháng (Net Cash Movement)", fmt: "money", signed: true, bold: true },
+  { key: "cashBalance", label: "Tiền mặt tại TK chung, luỹ kế (có vốn góp)", fmt: "money", bold: true, signed: true, isEnding: true }
 ];
 
 function formatCell(v, fmt) {
@@ -391,7 +425,9 @@ function renderMonthlyTable(model) {
    điểm, không cộng dồn được như dòng P&L).
    --------------------------------------------------------------------------- */
 const BALANCE_SHEET_ROWS = [
-  { key: "totalAssets", label: "TÀI SẢN — Tiền mặt (Cash)", bold: true, signed: true },
+  { key: "cashBalance", label: "TÀI SẢN — Tiền mặt tại TK chung (đã tiêu được)", signed: true },
+  { key: "cashInTransit", label: "TÀI SẢN — Tiền đang chuyển từ TK nhận doanh thu" },
+  { key: "totalAssets", label: "TỔNG TÀI SẢN", bold: true, signed: true },
   { key: "totalLiabilities", label: "NỢ PHẢI TRẢ" },
   { key: "paidInCapital", label: "VỐN CSH — Vốn góp (Paid-in capital)" },
   { key: "retainedEarnings", label: "VỐN CSH — Lợi nhuận giữ lại (Retained earnings)", signed: true },
@@ -561,7 +597,7 @@ function computeCostBreakdown(total) {
     { label: "Chi phí cố định", value: total.fixedOverheadMonthly },
     { label: "Nhân sự", value: total.headcountMonthly },
     { label: "Thiết lập một lần", value: total.oneTimeSetup },
-    { label: "Lợi nhuận ròng (Net Profit)", value: total.netCashFlow }
+    { label: "Lợi nhuận ròng (Net Profit)", value: total.accrualNetIncome }
   ];
   const visible = items.filter(i => i.value > 0.5);
   const totalRevenue = total.revenue;
@@ -636,6 +672,7 @@ function recalcAndRender() {
   updateFixedTotalDisplay();
   updateOneTimeTotalDisplay();
   updateHeadcountTotalDisplay();
+  updateShareholderTotalsDisplay();
   renderKPIs(model);
   renderFundingCallout(model);
   renderMonthlyTable(model);
@@ -849,6 +886,7 @@ function fullRenderAssumptionInputs() {
   renderFixedOverheadRows();
   renderOneTimeSetupRows();
   renderHeadcountRows();
+  renderShareholderRows();
   setSimpleFieldValues();
 }
 

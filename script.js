@@ -13,6 +13,17 @@
    Tháng 2 = mốc validate đầu tiên (đơn/ngày = baselineOrdersPerDay).
    Tháng 3-12 = tăng trưởng theo bậc mỗi tháng (monthlyGrowthPct), mặc định để
    đạt đúng mốc 200 đơn/ngày vào tháng 12 (~25,89%/tháng từ baseline 20 đơn/ngày).
+
+   VÒNG QUAY VỐN (cash conversion cycle): doanh thu thu về ở TK nhận tiền tại
+   Angola (GPayGo) không dùng trực tiếp để trả ads/nhập hàng được ngay — mất
+   `capital.cashConversionDays` (mặc định 30 ngày ≈ 1 tháng) trước khi "về" TK
+   chung để chi tiêu. EBITDA/Net income vẫn tính dồn tích (accrual, theo tháng
+   phát sinh) — CHỈ dòng tiền thực tế (netCashMovement/cashBalance) bị trễ.
+   Đây là lý do vốn cần ban đầu thực tế lớn hơn nhiều so với nhìn thuần EBITDA.
+
+   VỐN GÓP: `capital.shareholders` là bảng động (thêm/bớt cổ đông tự do) —
+   mỗi dòng có vốn góp ($) + tỷ lệ cổ phần (%). Tổng vốn góp các dòng = vốn
+   góp ban đầu đưa vào model (không còn là 1 số cố định như trước).
    ============================================================================ */
 
 /* ---------------------------------------------------------------------------
@@ -62,10 +73,12 @@ const DEFAULTS = {
   ],
   "headcount": [],
   "capital": {
-    "totalInvestment": 1500,
+    "cashConversionDays": 30,
     "maxAvailable": 10000,
-    "founderSplitHieuPct": 50,
-    "founderSplitTungPct": 50
+    "shareholders": [
+      { "name": "Hiếu", "contribution": 750, "equityPct": 50 },
+      { "name": "Tùng", "contribution": 750, "equityPct": 50 }
+    ]
   },
   "scenario": {
     "conservativeAdj": -50,
@@ -106,12 +119,19 @@ function calcModel(s, scenarioKey) {
   const adj = scenarioAdjustment(s, scenarioKey);
   const fixedOverheadMonthly = s.fixedOverhead.reduce((sum, r) => sum + Number(r.amount || 0), 0);
   const headcountMonthly = s.headcount.reduce((sum, r) => sum + Number(r.count || 0) * Number(r.monthlyRate || 0), 0);
+  const totalInvestment = (s.capital.shareholders || []).reduce((sum, r) => sum + Number(r.contribution || 0), 0);
+
+  // Độ trễ vòng quay vốn, quy đổi ra số tháng nguyên gần nhất (model chạy
+  // theo block tháng, không theo ngày thật) — mặc định 30 ngày = 1 tháng.
+  const delayMonths = Math.max(0, Math.round(Number(s.capital.cashConversionDays || 0) / DAYS_PER_MONTH));
 
   const months = [];
+  const revenueByMonth = {}; // m -> revenue, tra cứu lại khi tính tiền "về" TK chung
   let cashBalance = 0;
   let cashBalanceNoFunding = 0; // dòng tiền nếu KHÔNG góp vốn ban đầu — để lộ ra nhu cầu vốn thật
   let minCashNoFunding = 0;
   let minCashNoFundingMonth = 0;
+  let cashInTransit = 0; // tiền đã thu ở TK nhận doanh thu (Angola) nhưng CHƯA về TK chung
   let cumulativeNetIncome = 0;
 
   for (let m = 1; m <= MONTHS_PER_YEAR; m++) {
@@ -120,6 +140,7 @@ function calcModel(s, scenarioKey) {
     const ordersPerDay = m <= 1 ? 0 : Math.max(0, Math.round(rawOpd * (1 + adj)));
     const orders = ordersPerDay * DAYS_PER_MONTH;
     const revenue = orders * Number(s.revenue.aov || 0);
+    revenueByMonth[m] = revenue;
 
     const cogs = revenue * Number(s.costRates.cogsPct || 0) / 100;
     const ads = revenue * Number(s.costRates.adsPct || 0) / 100;
@@ -130,27 +151,42 @@ function calcModel(s, scenarioKey) {
 
     const oneTimeSetup = s.oneTimeSetup.reduce((sum, item) => sum + (Number(item.month) === m ? Number(item.amount || 0) : 0), 0);
 
+    // EBITDA / Net income: LUÔN dồn tích (accrual) — ghi nhận theo tháng phát
+    // sinh, KHÔNG phụ thuộc độ trễ chuyển tiền. Đây là số dùng cho P&L và
+    // Retained Earnings trên Balance Sheet.
     const ebitda = grossProfit - fixedOverheadMonthly - headcountMonthly;
-    const netCashFlow = ebitda - oneTimeSetup;
+    const accrualNetIncome = ebitda - oneTimeSetup;
 
-    cashBalance = (m === 1 ? Number(s.capital.totalInvestment || 0) : cashBalance) + netCashFlow;
-    cashBalanceNoFunding = cashBalanceNoFunding + netCashFlow;
+    // Dòng tiền THỰC TẾ: chi phí (COGS/ads/phí/overhead/nhân sự/setup) vẫn
+    // phải trả ngay trong tháng phát sinh; tiền VÀO chỉ dùng được từ doanh
+    // thu của `delayMonths` tháng trước (đã kịp "về" TK chung).
+    const usableRevenueCash = m > delayMonths ? (revenueByMonth[m - delayMonths] || 0) : 0;
+    const cashOutflow = variableCost + fixedOverheadMonthly + headcountMonthly + oneTimeSetup;
+    const netCashMovement = usableRevenueCash - cashOutflow;
+
+    cashBalance = (m === 1 ? totalInvestment : cashBalance) + netCashMovement;
+    cashBalanceNoFunding = cashBalanceNoFunding + netCashMovement;
     if (cashBalanceNoFunding < minCashNoFunding) {
       minCashNoFunding = cashBalanceNoFunding;
       minCashNoFundingMonth = m;
     }
-    cumulativeNetIncome += netCashFlow; // model đơn giản: không D&A/lãi vay/thuế -> net income = net cash flow
+    cashInTransit = cashInTransit + revenue - usableRevenueCash; // luỹ kế tiền chưa "về" TK chung
+    cumulativeNetIncome += accrualNetIncome; // dồn tích — không phụ thuộc độ trễ chuyển tiền
 
-    const paidInCapital = Number(s.capital.totalInvestment || 0);
+    const paidInCapital = totalInvestment;
     const retainedEarnings = cumulativeNetIncome;
     const totalEquity = paidInCapital + retainedEarnings;
     const totalLiabilities = 0;
-    const totalAssets = cashBalance; // chỉ có tiền mặt — không tồn kho (dropship), không AR (khách trả trước)
+    // Tài sản = tiền tại TK chung (đã tiêu được) + tiền đang trên đường về từ
+    // TK nhận doanh thu. Không tồn kho (dropship), không AR khách hàng (trả
+    // trước) — nhưng CÓ khoản tương đương AR nội bộ do độ trễ chuyển tiền.
+    const totalAssets = cashBalance + cashInTransit;
 
     months.push({
       m, ordersPerDay, orders, revenue, cogs, ads, paymentFee, returns, variableCost, grossProfit,
-      fixedOverheadMonthly, headcountMonthly, oneTimeSetup, ebitda, netCashFlow, cashBalance,
-      cashBalanceNoFunding, paidInCapital, retainedEarnings, totalEquity, totalLiabilities, totalAssets
+      fixedOverheadMonthly, headcountMonthly, oneTimeSetup, ebitda, accrualNetIncome,
+      usableRevenueCash, cashOutflow, netCashMovement, cashBalance, cashBalanceNoFunding, cashInTransit,
+      paidInCapital, retainedEarnings, totalEquity, totalLiabilities, totalAssets
     });
   }
 
@@ -168,10 +204,14 @@ function calcModel(s, scenarioKey) {
       a.headcountMonthly += mo.headcountMonthly;
       a.oneTimeSetup += mo.oneTimeSetup;
       a.ebitda += mo.ebitda;
-      a.netCashFlow += mo.netCashFlow;
+      a.accrualNetIncome += mo.accrualNetIncome;
+      a.usableRevenueCash += mo.usableRevenueCash;
+      a.cashOutflow += mo.cashOutflow;
+      a.netCashMovement += mo.netCashMovement;
       return a;
-    }, { orders: 0, revenue: 0, cogs: 0, ads: 0, paymentFee: 0, returns: 0, variableCost: 0, grossProfit: 0, fixedOverheadMonthly: 0, headcountMonthly: 0, oneTimeSetup: 0, ebitda: 0, netCashFlow: 0 });
+    }, { orders: 0, revenue: 0, cogs: 0, ads: 0, paymentFee: 0, returns: 0, variableCost: 0, grossProfit: 0, fixedOverheadMonthly: 0, headcountMonthly: 0, oneTimeSetup: 0, ebitda: 0, accrualNetIncome: 0, usableRevenueCash: 0, cashOutflow: 0, netCashMovement: 0 });
     acc.endingCash = monthsSlice[monthsSlice.length - 1].cashBalance;
+    acc.endingCashInTransit = monthsSlice[monthsSlice.length - 1].cashInTransit;
     acc.ebitdaMargin = acc.revenue !== 0 ? acc.ebitda / acc.revenue : 0;
     return acc;
   }
@@ -180,7 +220,8 @@ function calcModel(s, scenarioKey) {
 
   return {
     months, total, minCashNoFunding, minCashNoFundingMonth,
-    endOrdersPerDay: months[months.length - 1].ordersPerDay
+    endOrdersPerDay: months[months.length - 1].ordersPerDay,
+    totalInvestment, delayMonths
   };
 }
 
