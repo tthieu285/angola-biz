@@ -57,27 +57,53 @@ const DEFAULTS = {
     "aov": 30
   },
   "costRates": {
-    "cogsPct": 25,
-    "adsPct": 35,
-    "paymentFeePct": 4,
+    "cogsPct": 40,
+    "adsPct": 20,
+    "paymentFeePct": 20,
     "returnsPct": 0
   },
   "fixedOverhead": [
-    { "label": "VPS hosting (WooCommerce)", "amount": 35 },
-    { "label": "Công cụ/subscription khác (email, analytics...)", "amount": 0 }
+    {
+      "label": "VPS hosting (WooCommerce)",
+      "amount": 35
+    },
+    {
+      "label": "Công cụ/subscription khác (email, analytics...)",
+      "amount": 0
+    }
   ],
   "oneTimeSetup": [
-    { "label": "Đăng ký công ty tại Angola (INAPEM, pháp lý, công chứng)", "amount": 750, "month": 1 },
-    { "label": "Mở tài khoản ngân hàng doanh nghiệp Angola", "amount": 100, "month": 1 },
-    { "label": "Domain (.com / .co.ao, 1 năm)", "amount": 15, "month": 1 }
+    {
+      "label": "Đăng ký công ty tại Angola (INAPEM, pháp lý, công chứng)",
+      "amount": 750,
+      "month": 1
+    },
+    {
+      "label": "Mở tài khoản ngân hàng doanh nghiệp Angola",
+      "amount": 100,
+      "month": 1
+    },
+    {
+      "label": "Domain (.com / .co.ao, 1 năm)",
+      "amount": 15,
+      "month": 1
+    }
   ],
   "headcount": [],
   "capital": {
     "cashConversionDays": 30,
     "maxAvailable": 10000,
     "shareholders": [
-      { "name": "Hiếu", "contribution": 750, "equityPct": 50 },
-      { "name": "Tùng", "contribution": 750, "equityPct": 50 }
+      {
+        "name": "Hiếu",
+        "contribution": 750,
+        "equityPct": 50
+      },
+      {
+        "name": "Tùng",
+        "contribution": 750,
+        "equityPct": 50
+      }
     ]
   },
   "scenario": {
