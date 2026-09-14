@@ -28,7 +28,12 @@
    CHI PHÍ BIẾN ĐỔI: `variableCosts` cũng là bảng động (thêm/bớt/đổi tên tự
    do) — mỗi dòng là 1 khoản mục % doanh thu (COGS, Ads, phí thanh toán...).
    calcModel chỉ cộng tổng % của các dòng rồi tính 1 số variableCost duy
-   nhất mỗi tháng — không còn field riêng cogs/ads/paymentFee/returns.
+   nhất mỗi tháng — không còn field riêng cogs/ads/paymentFee/returns. Mỗi
+   dòng có thêm cờ `ownOnly`: TRUE = chỉ ảnh hưởng doanh thu của mình (vd.
+   Ads, nhập hàng — chi phí riêng của mình); FALSE = khoản mục "liên quan
+   đến dòng tiền" nên áp DỤNG CHUNG lên cả doanh thu seller nữa (vd. phí
+   thanh toán cổng — gateway tính phí trên MỌI giao dịch chạy qua, kể cả
+   của seller), làm giảm tương ứng phần net remit trả seller.
 
    DỊCH VỤ HẠ TẦNG CHO SELLER (`sellerService`): mảng phụ, chạy song song
    mảng tự bán hàng — cho 1-3 seller khác dùng chung hạ tầng thanh toán/
@@ -37,8 +42,10 @@
    thanh toán (cùng bị độ trễ `cashConversionDays` y hệt mảng chính), dùng
    tiền đó ứng trả nhập hàng (COGS) NGAY khi phát sinh đơn (giống cách trả
    COGS của mảng chính — không chờ độ trễ), trừ phí dịch vụ (thu nhập của
-   mình, cộng thẳng vào EBITDA), rồi CHUYỂN PHẦN CÒN LẠI cho seller — seller
-   cũng chờ ~cùng độ trễ đó mới nhận được tiền (không có thêm độ trễ riêng).
+   mình, cộng thẳng vào EBITDA) + trừ phần chi phí "dùng chung" ở mục C (áp
+   cùng % như của mình, vd phí thanh toán), rồi CHUYỂN PHẦN CÒN LẠI cho
+   seller — seller cũng chờ ~cùng độ trễ đó mới nhận được tiền (không có
+   thêm độ trễ riêng).
    Vì mình cầm giữ hộ tiền seller trong lúc chờ, phát sinh khoản NỢ PHẢI TRẢ
    `sellerPayable` (tăng mỗi tháng theo doanh thu mới phát sinh, giảm khi
    thực chuyển tiền) — đây là lý do `totalLiabilities` không còn luôn = 0.
@@ -78,95 +85,27 @@ const DEFAULTS = {
     "aov": 30
   },
   "variableCosts": [
-    {
-      "label": "Giá vốn hàng bán (COGS)",
-      "pct": 25
-    },
-    {
-      "label": "Quảng cáo (Ads)",
-      "pct": 35
-    },
-    {
-      "label": "Phi AppyPay",
-      "pct": 0.4
-    },
-    {
-      "label": "Phi Multicaixa/EMIS",
-      "pct": 4
-    },
-    {
-      "label": "Phí chuyển tiền về VN",
-      "pct": 2
-    }
+    { "label": "Giá vốn hàng bán (COGS)", "pct": 25, "ownOnly": true },
+    { "label": "Quảng cáo (Ads)", "pct": 35, "ownOnly": true },
+    { "label": "Phí thanh toán (AppyPay + FX markup)", "pct": 4, "ownOnly": false },
+    { "label": "Hoàn/huỷ đơn", "pct": 0, "ownOnly": false }
   ],
   "fixedOverhead": [
-    {
-      "label": "VPS hosting (WooCommerce)",
-      "amount": 35
-    },
-    {
-      "label": "Công cụ/subscription khác (email, analytics...)",
-      "amount": 0
-    }
+    { "label": "VPS hosting (WooCommerce)", "amount": 35 },
+    { "label": "Công cụ/subscription khác (email, analytics...)", "amount": 0 }
   ],
   "oneTimeSetup": [
-    {
-      "label": "Đăng ký công ty tại Angola (INAPEM, pháp lý, công chứng)",
-      "amount": 750,
-      "month": 1
-    },
-    {
-      "label": "Mở tài khoản ngân hàng doanh nghiệp Angola",
-      "amount": 100,
-      "month": 1
-    },
-    {
-      "label": "Domain (.com / .co.ao, 1 năm)",
-      "amount": 15,
-      "month": 1
-    }
+    { "label": "Đăng ký công ty tại Angola (INAPEM, pháp lý, công chứng)", "amount": 750, "month": 1 },
+    { "label": "Mở tài khoản ngân hàng doanh nghiệp Angola", "amount": 100, "month": 1 },
+    { "label": "Domain (.com / .co.ao, 1 năm)", "amount": 15, "month": 1 }
   ],
-  "headcount": [
-    {
-      "role": "Giám đốc",
-      "count": 1,
-      "monthlyRate": 1000
-    },
-    {
-      "role": "Quản lý",
-      "count": 1,
-      "monthlyRate": 1000
-    },
-    {
-      "role": "Fulfillment",
-      "count": 1,
-      "monthlyRate": 600
-    },
-    {
-      "role": "CS",
-      "count": 1,
-      "monthlyRate": 600
-    }
-  ],
+  "headcount": [],
   "capital": {
-    "cashConversionDays": 7,
+    "cashConversionDays": 30,
     "maxAvailable": 10000,
     "shareholders": [
-      {
-        "name": "Hiếu",
-        "contribution": 1000,
-        "equityPct": 34
-      },
-      {
-        "name": "Tùng",
-        "contribution": 1000,
-        "equityPct": 33
-      },
-      {
-        "name": "Hoàng",
-        "contribution": 1000,
-        "equityPct": 33
-      }
+      { "name": "Hiếu", "contribution": 750, "equityPct": 50 },
+      { "name": "Tùng", "contribution": 750, "equityPct": 50 }
     ]
   },
   "scenario": {
@@ -175,14 +114,7 @@ const DEFAULTS = {
   },
   "sellerService": {
     "feePct": 10,
-    "sellers": [
-      {
-        "name": "Hải béo",
-        "ordersPerDay": 50,
-        "aov": 30,
-        "cogsPct": 25
-      }
-    ]
+    "sellers": []
   }
 };
 /* === DEFAULTS:END === */
@@ -220,7 +152,7 @@ function computeRawOrdersPerDay(s, month) {
    thuộc m. Vẫn áp điều chỉnh kịch bản (adj) như mảng chính, để kịch bản
    Conservative/Optimistic phản ánh đúng toàn bộ business chứ không chỉ
    mảng tự bán hàng. */
-function computeSellerMonthlyAggregate(s, adj) {
+function computeSellerMonthlyAggregate(s, adj, sharedCostPct) {
   const sellers = (s.sellerService && s.sellerService.sellers) || [];
   const feePct = Number((s.sellerService && s.sellerService.feePct) || 0);
   let revenue = 0;
@@ -232,8 +164,12 @@ function computeSellerMonthlyAggregate(s, adj) {
     cogsCost += rev * Number(sel.cogsPct || 0) / 100;
   });
   const feeRevenue = revenue * feePct / 100;
-  const netRemit = revenue - cogsCost - feeRevenue;
-  return { revenue, cogsCost, feeRevenue, netRemit };
+  // Chi phí "dùng chung" (mục C, dòng không tick ownOnly) — áp cùng % như
+  // của mình lên doanh thu seller (vd. phí cổng thanh toán tính trên MỌI
+  // giao dịch chạy qua, kể cả của seller) — trừ luôn vào net remit trả seller.
+  const sharedCost = revenue * Number(sharedCostPct || 0) / 100;
+  const netRemit = revenue - cogsCost - sharedCost - feeRevenue;
+  return { revenue, cogsCost, sharedCost, feeRevenue, netRemit };
 }
 
 function calcModel(s, scenarioKey) {
@@ -242,7 +178,10 @@ function calcModel(s, scenarioKey) {
   const headcountMonthly = s.headcount.reduce((sum, r) => sum + Number(r.count || 0) * Number(r.monthlyRate || 0), 0);
   const totalInvestment = (s.capital.shareholders || []).reduce((sum, r) => sum + Number(r.contribution || 0), 0);
   const variableCostPctTotal = (s.variableCosts || []).reduce((sum, r) => sum + Number(r.pct || 0), 0);
-  const sellerAgg = computeSellerMonthlyAggregate(s, adj);
+  // Chỉ các dòng KHÔNG tick "chỉ ảnh hưởng đến mình" (ownOnly=false) mới áp
+  // dụng chung lên doanh thu seller — vd phí thanh toán, hoàn/huỷ đơn.
+  const sharedVariableCostPctTotal = (s.variableCosts || []).reduce((sum, r) => sum + (r.ownOnly ? 0 : Number(r.pct || 0)), 0);
+  const sellerAgg = computeSellerMonthlyAggregate(s, adj, sharedVariableCostPctTotal);
 
   // Độ trễ vòng quay vốn, quy đổi ra số tháng nguyên gần nhất (model chạy
   // theo block tháng, không theo ngày thật) — mặc định 30 ngày = 1 tháng.
@@ -293,8 +232,11 @@ function calcModel(s, scenarioKey) {
     // mảng chính), KHÔNG chờ độ trễ. Net remit trả seller: CHỜ độ trễ y hệt
     // mảng chính (chỉ trả khi lô doanh thu tương ứng đã "về" TK chung).
     const sellerCogsCost = sellerAgg.cogsCost;
+    // Chi phí dùng chung (phí cổng thanh toán...) áp lên doanh thu seller —
+    // mình trả/khấu trừ NGAY (giống COGS hộ seller), không chờ độ trễ.
+    const sellerSharedCost = sellerAgg.sharedCost;
     const sellerNetRemitPaid = m > delayMonths ? sellerAgg.netRemit : 0;
-    const cashOutflow = variableCost + fixedOverheadMonthly + headcountMonthly + oneTimeSetup + sellerCogsCost + sellerNetRemitPaid;
+    const cashOutflow = variableCost + fixedOverheadMonthly + headcountMonthly + oneTimeSetup + sellerCogsCost + sellerSharedCost + sellerNetRemitPaid;
     const netCashMovement = usableRevenueCash - cashOutflow;
 
     cashBalance = (m === 1 ? totalInvestment : cashBalance) + netCashMovement;
@@ -323,7 +265,7 @@ function calcModel(s, scenarioKey) {
 
     months.push({
       m, ordersPerDay, orders, revenue, variableCost, grossProfit,
-      sellerRevenue: sellerAgg.revenue, sellerCogsCost, sellerFeeRevenue, sellerNetRemitPaid,
+      sellerRevenue: sellerAgg.revenue, sellerCogsCost, sellerSharedCost, sellerFeeRevenue, sellerNetRemitPaid,
       fixedOverheadMonthly, headcountMonthly, oneTimeSetup, ebitda, accrualNetIncome,
       usableRevenueCash, cashOutflow, netCashMovement, cashBalance, cashBalanceNoFunding, cashInTransit,
       paidInCapital, retainedEarnings, totalEquity, totalLiabilities, totalAssets
@@ -338,6 +280,7 @@ function calcModel(s, scenarioKey) {
       a.grossProfit += mo.grossProfit;
       a.sellerRevenue += mo.sellerRevenue;
       a.sellerCogsCost += mo.sellerCogsCost;
+      a.sellerSharedCost += mo.sellerSharedCost;
       a.sellerFeeRevenue += mo.sellerFeeRevenue;
       a.sellerNetRemitPaid += mo.sellerNetRemitPaid;
       a.fixedOverheadMonthly += mo.fixedOverheadMonthly;
@@ -349,10 +292,14 @@ function calcModel(s, scenarioKey) {
       a.cashOutflow += mo.cashOutflow;
       a.netCashMovement += mo.netCashMovement;
       return a;
-    }, { orders: 0, revenue: 0, variableCost: 0, grossProfit: 0, sellerRevenue: 0, sellerCogsCost: 0, sellerFeeRevenue: 0, sellerNetRemitPaid: 0, fixedOverheadMonthly: 0, headcountMonthly: 0, oneTimeSetup: 0, ebitda: 0, accrualNetIncome: 0, usableRevenueCash: 0, cashOutflow: 0, netCashMovement: 0 });
+    }, { orders: 0, revenue: 0, variableCost: 0, grossProfit: 0, sellerRevenue: 0, sellerCogsCost: 0, sellerSharedCost: 0, sellerFeeRevenue: 0, sellerNetRemitPaid: 0, fixedOverheadMonthly: 0, headcountMonthly: 0, oneTimeSetup: 0, ebitda: 0, accrualNetIncome: 0, usableRevenueCash: 0, cashOutflow: 0, netCashMovement: 0 });
     acc.endingCash = monthsSlice[monthsSlice.length - 1].cashBalance;
     acc.endingCashInTransit = monthsSlice[monthsSlice.length - 1].cashInTransit;
-    acc.ebitdaMargin = acc.revenue !== 0 ? acc.ebitda / acc.revenue : 0;
+    // Tổng doanh thu "gộp" = doanh thu bán hàng của mình + doanh thu dịch vụ
+    // (phí thu từ seller) — dùng cho dashboard/KPI để phản ánh ĐÚNG toàn bộ
+    // doanh thu của business (bán hàng + dịch vụ), không chỉ riêng mảng bán hàng.
+    acc.totalRevenueCombined = acc.revenue + acc.sellerFeeRevenue;
+    acc.ebitdaMargin = acc.totalRevenueCombined !== 0 ? acc.ebitda / acc.totalRevenueCombined : 0;
     return acc;
   }
 

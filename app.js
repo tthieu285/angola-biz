@@ -71,9 +71,10 @@ function formatMoneyCompact(vUsd) {
 }
 
 /* Chart colors (plain hex, not CSS vars, inside SVG for broader browser compatibility) */
-const COLOR_SERIES_1 = "#2a78d6"; // doanh thu / cash có vốn góp
+const COLOR_SERIES_1 = "#2a78d6"; // doanh thu bán hàng / cash có vốn góp
 const COLOR_SERIES_2 = "#eb6834"; // EBITDA
 const COLOR_SERIES_3 = "#8a5cf6"; // cash nếu KHÔNG góp vốn
+const COLOR_SERIES_4 = "#1baf7a"; // doanh thu dịch vụ (phí seller)
 const COLOR_GRID = "#e1e0d9";
 const COLOR_MUTED = "#898781";
 const COLOR_BASELINE = "#c3c2b7";
@@ -181,6 +182,7 @@ function renderVariableCostRows() {
     <tr>
       <td><input type="text" data-list="variableCosts" data-index="${i}" data-field="label" value="${escapeHtml(row.label)}"></td>
       <td class="col-count"><input type="number" step="0.5" data-list="variableCosts" data-index="${i}" data-field="pct" value="${roundForInput(row.pct)}"></td>
+      <td class="col-check"><input type="checkbox" data-list="variableCosts" data-index="${i}" data-field="ownOnly" ${row.ownOnly ? "checked" : ""}></td>
       <td class="col-remove"><button class="row-remove-btn" data-remove="variableCosts" data-index="${i}" type="button" title="Xoá dòng">✕</button></td>
     </tr>
   `).join("");
@@ -223,7 +225,9 @@ function bindDynamicTableEvents() {
     if (!arr || !arr[idx]) return;
 
     let value;
-    if (t.type === "number") {
+    if (t.type === "checkbox") {
+      value = t.checked;
+    } else if (t.type === "number") {
       value = parseFloat(t.value);
       if (isNaN(value)) value = 0;
     } else {
@@ -271,7 +275,7 @@ function bindDynamicTableEvents() {
     recalcAndRender();
   });
   document.getElementById("addVariableCostRow").addEventListener("click", () => {
-    state.variableCosts.push({ label: "Khoản mục mới", pct: 0 });
+    state.variableCosts.push({ label: "Khoản mục mới", pct: 0, ownOnly: true });
     renderVariableCostRows();
     recalcAndRender();
   });
@@ -311,13 +315,15 @@ function updateVariableCostTotalsDisplay() {
   const el = document.getElementById("variableCostTotalRow");
   if (!el) return;
   const totalPct = state.variableCosts.reduce((s, r) => s + Number(r.pct || 0), 0);
-  el.textContent = `Tổng chi phí biến đổi: ${totalPct.toFixed(1)}% doanh thu`;
+  const sharedPct = state.variableCosts.reduce((s, r) => s + (r.ownOnly ? 0 : Number(r.pct || 0)), 0);
+  el.textContent = `Tổng chi phí biến đổi: ${totalPct.toFixed(1)}% doanh thu (trong đó ${sharedPct.toFixed(1)}% dùng chung, áp cả lên doanh thu seller)`;
 }
 function updateSellerTotalsDisplay() {
   const el = document.getElementById("sellerTotalRow");
   if (!el) return;
   const sellers = state.sellerService.sellers;
   const feePct = Number(state.sellerService.feePct || 0);
+  const sharedPct = state.variableCosts.reduce((s, r) => s + (r.ownOnly ? 0 : Number(r.pct || 0)), 0);
   let revenue = 0, cogsCost = 0;
   sellers.forEach(sel => {
     const rev = Number(sel.ordersPerDay || 0) * DAYS_PER_MONTH * Number(sel.aov || 0);
@@ -325,8 +331,9 @@ function updateSellerTotalsDisplay() {
     cogsCost += rev * Number(sel.cogsPct || 0) / 100;
   });
   const feeRevenue = revenue * feePct / 100;
-  const netRemit = revenue - cogsCost - feeRevenue;
-  el.textContent = `Ước tính/tháng (kịch bản Base, chưa tính độ trễ chuyển tiền): Doanh thu seller ${formatMoney(revenue)} — Phí dịch vụ (thu nhập của mình) ${formatMoney(feeRevenue)} — Ứng trả nhập hàng hộ ${formatMoney(cogsCost)} — Chuyển về seller ${formatMoney(netRemit)}`;
+  const sharedCost = revenue * sharedPct / 100;
+  const netRemit = revenue - cogsCost - sharedCost - feeRevenue;
+  el.textContent = `Ước tính/tháng (kịch bản Base, chưa tính độ trễ chuyển tiền): Doanh thu seller ${formatMoney(revenue)} — Phí dịch vụ (thu nhập của mình) ${formatMoney(feeRevenue)} — Ứng trả nhập hàng hộ ${formatMoney(cogsCost)} — Chi phí dùng chung (${sharedPct.toFixed(1)}%) ${formatMoney(sharedCost)} — Chuyển về seller ${formatMoney(netRemit)}`;
 }
 
 function renderVolumeBoxes(model) {
@@ -346,8 +353,8 @@ function renderVolumeBoxes(model) {
       <div class="value">${fmtNum(model.total.orders, 0)}</div>
     </div>
     <div class="rev-box total">
-      <div class="label">TỔNG DOANH THU CẢ NĂM</div>
-      <div class="value">${formatMoney(model.total.revenue)}</div>
+      <div class="label">TỔNG DOANH THU CẢ NĂM (gồm cả dịch vụ)</div>
+      <div class="value">${formatMoney(model.total.totalRevenueCombined)}</div>
     </div>
   `;
 }
@@ -361,9 +368,9 @@ function renderKPIs(model) {
   const el = document.getElementById("kpiGrid");
   el.innerHTML = `
     <div class="kpi-card">
-      <div class="kpi-label">Doanh thu Năm 1</div>
-      <div class="kpi-value">${formatMoney(total.revenue)}</div>
-      <div class="kpi-sub">${fmtNum(total.orders, 0)} đơn cả năm</div>
+      <div class="kpi-label">Doanh thu Năm 1 (gồm cả dịch vụ)</div>
+      <div class="kpi-value">${formatMoney(total.totalRevenueCombined)}</div>
+      <div class="kpi-sub">${fmtNum(total.orders, 0)} đơn cả năm — trong đó doanh thu dịch vụ ${formatMoney(total.sellerFeeRevenue)}</div>
     </div>
     <div class="kpi-card">
       <div class="kpi-label">EBITDA Năm 1</div>
@@ -437,6 +444,7 @@ const TABLE_ROWS_BEFORE_VC = [
 ];
 const TABLE_ROWS_AFTER_VC = [
   { key: "grossProfit", label: "Lợi nhuận gộp", fmt: "money", signed: true },
+  { key: "sellerRevenue", label: "Doanh thu của seller (tổng, trước khi trừ chi phí)", fmt: "money", sub: true },
   { key: "sellerFeeRevenue", label: "Doanh thu dịch vụ seller (phí)", fmt: "money" },
   { key: "fixedOverheadMonthly", label: "Chi phí cố định", fmt: "money" },
   { key: "headcountMonthly", label: "Nhân sự", fmt: "money" },
@@ -545,9 +553,12 @@ function renderRevenueEbitdaChart(months) {
   const plotW = W - padL - padR, plotH = H - padT - padB;
   const n = months.length;
 
-  const revs = months.map(m => m.revenue);
+  // Cột doanh thu là cột GHÉP (stacked): đoạn dưới = doanh thu bán hàng
+  // (m.revenue), đoạn trên = doanh thu dịch vụ/phí seller (m.sellerFeeRevenue)
+  // — 2 màu khác nhau, tổng chiều cao cột = tổng doanh thu (bán hàng + dịch vụ).
+  const stackTotals = months.map(m => m.revenue + m.sellerFeeRevenue);
   const ebs = months.map(m => m.ebitda);
-  const allVals = revs.concat(ebs);
+  const allVals = stackTotals.concat(ebs);
   const minV = Math.min(0, ...allVals);
   const maxV = Math.max(0, ...allVals);
   const range = (maxV - minV) || 1;
@@ -570,10 +581,24 @@ function renderRevenueEbitdaChart(months) {
   const linePts = [];
   months.forEach((m, i) => {
     const cx = padL + bandW * i + bandW / 2;
-    const y = yScale(m.revenue);
-    const top = Math.min(y, zeroY);
-    const h = Math.max(Math.abs(zeroY - y), 1);
-    barsSvg += `<rect class="bar-mark" x="${(cx - barW / 2).toFixed(1)}" y="${top.toFixed(1)}" width="${barW.toFixed(1)}" height="${h.toFixed(1)}" rx="3" fill="${COLOR_SERIES_1}"><title>Th.${m.m}: Doanh thu ${formatMoney(m.revenue)}</title></rect>`;
+    const x = (cx - barW / 2).toFixed(1);
+
+    // Đoạn dưới: doanh thu bán hàng (từ 0 lên m.revenue)
+    const yRevTop = yScale(m.revenue);
+    const ownTop = Math.min(yRevTop, zeroY);
+    const ownH = Math.abs(zeroY - yRevTop);
+    if (ownH > 0.5) {
+      barsSvg += `<rect class="bar-mark" x="${x}" y="${ownTop.toFixed(1)}" width="${barW.toFixed(1)}" height="${ownH.toFixed(1)}" rx="3" fill="${COLOR_SERIES_1}"><title>Th.${m.m}: Doanh thu bán hàng ${formatMoney(m.revenue)}</title></rect>`;
+    }
+
+    // Đoạn trên: doanh thu dịch vụ/phí seller (chồng từ m.revenue lên tổng)
+    if (m.sellerFeeRevenue > 0) {
+      const yStackTop = yScale(m.revenue + m.sellerFeeRevenue);
+      const svcTop = Math.min(yStackTop, yRevTop);
+      const svcH = Math.max(Math.abs(yRevTop - yStackTop), 1);
+      barsSvg += `<rect class="bar-mark" x="${x}" y="${svcTop.toFixed(1)}" width="${barW.toFixed(1)}" height="${svcH.toFixed(1)}" rx="3" fill="${COLOR_SERIES_4}"><title>Th.${m.m}: Doanh thu dịch vụ (phí seller) ${formatMoney(m.sellerFeeRevenue)}</title></rect>`;
+    }
+
     linePts.push([cx, yScale(m.ebitda)]);
     labelsSvg += `<text x="${cx.toFixed(1)}" y="${H - 8}" text-anchor="middle" font-size="9" fill="${COLOR_MUTED}">Th.${m.m}</text>`;
   });

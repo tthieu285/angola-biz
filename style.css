@@ -17,6 +17,7 @@
   --series-1:       #2a78d6; /* blue — doanh thu / cash (có vốn góp) */
   --series-2:       #eb6834; /* orange — EBITDA / currency switcher */
   --series-3:       #8a5cf6; /* violet — cash nếu KHÔNG góp vốn */
+  --series-4:       #1baf7a; /* green — doanh thu dịch vụ (phí seller) */
   --good:           #0ca30c;
   --critical:       #d03b3b;
   --warning-bg:     #fff4e5;
@@ -402,6 +403,17 @@ html, body {
 .dyn-table .col-month { width: 100px; }
 
 .dyn-table .col-rate { width: 140px; }
+
+.dyn-table .col-check { width: 130px; text-align: center; }
+
+.dyn-table td.col-check { text-align: center; }
+
+.dyn-table input[type="checkbox"] {
+  width: 17px;
+  height: 17px;
+  cursor: pointer;
+  accent-color: var(--series-1);
+}
 
 .dyn-table .col-remove { width: 36px; text-align: center; }
 

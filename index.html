@@ -42,7 +42,8 @@
     <div class="chart-card">
       <h3 id="chartRevenueEbitdaTitle">Doanh thu & EBITDA theo tháng</h3>
       <div class="chart-legend">
-        <span><span class="dot" style="background:var(--series-1)"></span>Doanh thu</span>
+        <span><span class="dot" style="background:var(--series-1)"></span>Doanh thu bán hàng</span>
+        <span><span class="dot" style="background:var(--series-4)"></span>Doanh thu dịch vụ (phí seller)</span>
         <span><span class="dot" style="background:var(--series-2)"></span>EBITDA</span>
       </div>
       <div id="chartRevenueEbitda"></div>
@@ -134,6 +135,7 @@
             <tr>
               <th>Khoản mục</th>
               <th class="col-count">% doanh thu</th>
+              <th class="col-check">Chỉ ảnh hưởng đến mình</th>
               <th class="col-remove"></th>
             </tr>
           </thead>
@@ -141,7 +143,7 @@
         </table>
         <button class="add-row-btn" id="addVariableCostRow" type="button">+ Thêm khoản mục</button>
         <div class="mix-total-row" id="variableCostTotalRow">—</div>
-        <span class="field-note">Bảng động — thêm/bớt/đổi tên khoản mục tự do vì anh Hiếu chưa nắm hết các loại chi phí biến đổi có thể phát sinh. Mặc định gồm 4 khoản: COGS (đã gồm giá sản phẩm + ship từ Trung Quốc + thuế nhập khẩu, all-in), Ads, phí thanh toán (ước tính tham khảo thị trường Angola — GPayGo chưa công bố biểu phí chính thức), và hoàn/huỷ đơn (mặc định 0% vì khách thanh toán trước rồi mới ship).</span>
+        <span class="field-note">Bảng động — thêm/bớt/đổi tên khoản mục tự do vì anh Hiếu chưa nắm hết các loại chi phí biến đổi có thể phát sinh. Mặc định gồm 4 khoản: COGS (đã gồm giá sản phẩm + ship từ Trung Quốc + thuế nhập khẩu, all-in), Ads, phí thanh toán (ước tính tham khảo thị trường Angola — AppyPay chưa công bố biểu phí chính thức), và hoàn/huỷ đơn (mặc định 0% vì khách thanh toán trước rồi mới ship). Tick "Chỉ ảnh hưởng đến mình" cho khoản chỉ tính vào doanh thu riêng của mình (vd. Ads, nhập hàng); BỎ tick cho khoản liên quan đến dòng tiền chung nên áp cùng % lên cả doanh thu seller (vd. phí thanh toán cổng — thu trên mọi giao dịch chạy qua hạ tầng, kể cả của seller) — xem mục I.</span>
       </div>
 
       <!-- D. Fixed overhead -->
