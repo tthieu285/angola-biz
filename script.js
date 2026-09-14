@@ -24,6 +24,27 @@
    VỐN GÓP: `capital.shareholders` là bảng động (thêm/bớt cổ đông tự do) —
    mỗi dòng có vốn góp ($) + tỷ lệ cổ phần (%). Tổng vốn góp các dòng = vốn
    góp ban đầu đưa vào model (không còn là 1 số cố định như trước).
+
+   CHI PHÍ BIẾN ĐỔI: `variableCosts` cũng là bảng động (thêm/bớt/đổi tên tự
+   do) — mỗi dòng là 1 khoản mục % doanh thu (COGS, Ads, phí thanh toán...).
+   calcModel chỉ cộng tổng % của các dòng rồi tính 1 số variableCost duy
+   nhất mỗi tháng — không còn field riêng cogs/ads/paymentFee/returns.
+
+   DỊCH VỤ HẠ TẦNG CHO SELLER (`sellerService`): mảng phụ, chạy song song
+   mảng tự bán hàng — cho 1-3 seller khác dùng chung hạ tầng thanh toán/
+   chuyển tiền, thu phí `feePct`% trên doanh thu của họ. Cơ chế (chốt với
+   anh Hiếu 2026-09-14): mình thu hộ TOÀN BỘ doanh thu seller qua cùng cổng
+   thanh toán (cùng bị độ trễ `cashConversionDays` y hệt mảng chính), dùng
+   tiền đó ứng trả nhập hàng (COGS) NGAY khi phát sinh đơn (giống cách trả
+   COGS của mảng chính — không chờ độ trễ), trừ phí dịch vụ (thu nhập của
+   mình, cộng thẳng vào EBITDA), rồi CHUYỂN PHẦN CÒN LẠI cho seller — seller
+   cũng chờ ~cùng độ trễ đó mới nhận được tiền (không có thêm độ trễ riêng).
+   Vì mình cầm giữ hộ tiền seller trong lúc chờ, phát sinh khoản NỢ PHẢI TRẢ
+   `sellerPayable` (tăng mỗi tháng theo doanh thu mới phát sinh, giảm khi
+   thực chuyển tiền) — đây là lý do `totalLiabilities` không còn luôn = 0.
+   Seller giả định hoạt động ỔN ĐỊNH (không tăng trưởng theo tháng) ngay từ
+   Tháng 1 — khác với mảng chính (Tháng 1 = 0 đơn, tăng trưởng từ Tháng 2).
+   Mỗi seller có AOV + % nhập hàng riêng (sản phẩm có thể khác nhau).
    ============================================================================ */
 
 /* ---------------------------------------------------------------------------
@@ -56,59 +77,37 @@ const DEFAULTS = {
   "revenue": {
     "aov": 30
   },
-  "costRates": {
-    "cogsPct": 40,
-    "adsPct": 20,
-    "paymentFeePct": 20,
-    "returnsPct": 0
-  },
+  "variableCosts": [
+    { "label": "Giá vốn hàng bán (COGS)", "pct": 25 },
+    { "label": "Quảng cáo (Ads)", "pct": 35 },
+    { "label": "Phí thanh toán (GPayGo + FX markup)", "pct": 4 },
+    { "label": "Hoàn/huỷ đơn", "pct": 0 }
+  ],
   "fixedOverhead": [
-    {
-      "label": "VPS hosting (WooCommerce)",
-      "amount": 35
-    },
-    {
-      "label": "Công cụ/subscription khác (email, analytics...)",
-      "amount": 0
-    }
+    { "label": "VPS hosting (WooCommerce)", "amount": 35 },
+    { "label": "Công cụ/subscription khác (email, analytics...)", "amount": 0 }
   ],
   "oneTimeSetup": [
-    {
-      "label": "Đăng ký công ty tại Angola (INAPEM, pháp lý, công chứng)",
-      "amount": 750,
-      "month": 1
-    },
-    {
-      "label": "Mở tài khoản ngân hàng doanh nghiệp Angola",
-      "amount": 100,
-      "month": 1
-    },
-    {
-      "label": "Domain (.com / .co.ao, 1 năm)",
-      "amount": 15,
-      "month": 1
-    }
+    { "label": "Đăng ký công ty tại Angola (INAPEM, pháp lý, công chứng)", "amount": 750, "month": 1 },
+    { "label": "Mở tài khoản ngân hàng doanh nghiệp Angola", "amount": 100, "month": 1 },
+    { "label": "Domain (.com / .co.ao, 1 năm)", "amount": 15, "month": 1 }
   ],
   "headcount": [],
   "capital": {
-    "cashConversionDays": 7,
+    "cashConversionDays": 30,
     "maxAvailable": 10000,
     "shareholders": [
-      {
-        "name": "Hiếu",
-        "contribution": 750,
-        "equityPct": 50
-      },
-      {
-        "name": "Tùng",
-        "contribution": 750,
-        "equityPct": 50
-      }
+      { "name": "Hiếu", "contribution": 750, "equityPct": 50 },
+      { "name": "Tùng", "contribution": 750, "equityPct": 50 }
     ]
   },
   "scenario": {
     "conservativeAdj": -50,
     "optimisticAdj": 50
+  },
+  "sellerService": {
+    "feePct": 10,
+    "sellers": []
   }
 };
 /* === DEFAULTS:END === */
@@ -141,11 +140,34 @@ function computeRawOrdersPerDay(s, month) {
   return base * Math.pow(1 + g, month - 2);
 }
 
+/* Doanh thu/chi phí dịch vụ seller — ỔN ĐỊNH mỗi tháng (không tăng trưởng
+   theo tháng, hoạt động đều từ Tháng 1), nên chỉ cần tính 1 LẦN, không phụ
+   thuộc m. Vẫn áp điều chỉnh kịch bản (adj) như mảng chính, để kịch bản
+   Conservative/Optimistic phản ánh đúng toàn bộ business chứ không chỉ
+   mảng tự bán hàng. */
+function computeSellerMonthlyAggregate(s, adj) {
+  const sellers = (s.sellerService && s.sellerService.sellers) || [];
+  const feePct = Number((s.sellerService && s.sellerService.feePct) || 0);
+  let revenue = 0;
+  let cogsCost = 0;
+  sellers.forEach(sel => {
+    const opd = Math.max(0, Math.round(Number(sel.ordersPerDay || 0) * (1 + adj)));
+    const rev = opd * DAYS_PER_MONTH * Number(sel.aov || 0);
+    revenue += rev;
+    cogsCost += rev * Number(sel.cogsPct || 0) / 100;
+  });
+  const feeRevenue = revenue * feePct / 100;
+  const netRemit = revenue - cogsCost - feeRevenue;
+  return { revenue, cogsCost, feeRevenue, netRemit };
+}
+
 function calcModel(s, scenarioKey) {
   const adj = scenarioAdjustment(s, scenarioKey);
   const fixedOverheadMonthly = s.fixedOverhead.reduce((sum, r) => sum + Number(r.amount || 0), 0);
   const headcountMonthly = s.headcount.reduce((sum, r) => sum + Number(r.count || 0) * Number(r.monthlyRate || 0), 0);
   const totalInvestment = (s.capital.shareholders || []).reduce((sum, r) => sum + Number(r.contribution || 0), 0);
+  const variableCostPctTotal = (s.variableCosts || []).reduce((sum, r) => sum + Number(r.pct || 0), 0);
+  const sellerAgg = computeSellerMonthlyAggregate(s, adj);
 
   // Độ trễ vòng quay vốn, quy đổi ra số tháng nguyên gần nhất (model chạy
   // theo block tháng, không theo ngày thật) — mặc định 30 ngày = 1 tháng.
@@ -159,6 +181,7 @@ function calcModel(s, scenarioKey) {
   let minCashNoFundingMonth = 0;
   let cashInTransit = 0; // tiền đã thu ở TK nhận doanh thu (Angola) nhưng CHƯA về TK chung
   let cumulativeNetIncome = 0;
+  let sellerPayable = 0; // luỹ kế tiền đang giữ hộ seller, CHƯA chuyển trả (nợ phải trả)
 
   for (let m = 1; m <= MONTHS_PER_YEAR; m++) {
     const rawOpd = computeRawOrdersPerDay(s, m);
@@ -168,26 +191,35 @@ function calcModel(s, scenarioKey) {
     const revenue = orders * Number(s.revenue.aov || 0);
     revenueByMonth[m] = revenue;
 
-    const cogs = revenue * Number(s.costRates.cogsPct || 0) / 100;
-    const ads = revenue * Number(s.costRates.adsPct || 0) / 100;
-    const paymentFee = revenue * Number(s.costRates.paymentFeePct || 0) / 100;
-    const returns = revenue * Number(s.costRates.returnsPct || 0) / 100;
-    const variableCost = cogs + ads + paymentFee + returns;
+    const variableCost = revenue * variableCostPctTotal / 100;
     const grossProfit = revenue - variableCost;
 
     const oneTimeSetup = s.oneTimeSetup.reduce((sum, item) => sum + (Number(item.month) === m ? Number(item.amount || 0) : 0), 0);
 
     // EBITDA / Net income: LUÔN dồn tích (accrual) — ghi nhận theo tháng phát
     // sinh, KHÔNG phụ thuộc độ trễ chuyển tiền. Đây là số dùng cho P&L và
-    // Retained Earnings trên Balance Sheet.
-    const ebitda = grossProfit - fixedOverheadMonthly - headcountMonthly;
+    // Retained Earnings trên Balance Sheet. Phí dịch vụ seller (thu nhập của
+    // mình) cộng thẳng vào EBITDA — phần COGS/net remit của seller KHÔNG
+    // phải doanh thu/chi phí của mình (chỉ là tiền giữ hộ), nên không vào đây.
+    const sellerFeeRevenue = sellerAgg.feeRevenue;
+    const ebitda = grossProfit + sellerFeeRevenue - fixedOverheadMonthly - headcountMonthly;
     const accrualNetIncome = ebitda - oneTimeSetup;
 
-    // Dòng tiền THỰC TẾ: chi phí (COGS/ads/phí/overhead/nhân sự/setup) vẫn
+    // Dòng tiền THỰC TẾ: chi phí (variableCost/overhead/nhân sự/setup) vẫn
     // phải trả ngay trong tháng phát sinh; tiền VÀO chỉ dùng được từ doanh
-    // thu của `delayMonths` tháng trước (đã kịp "về" TK chung).
-    const usableRevenueCash = m > delayMonths ? (revenueByMonth[m - delayMonths] || 0) : 0;
-    const cashOutflow = variableCost + fixedOverheadMonthly + headcountMonthly + oneTimeSetup;
+    // thu của `delayMonths` tháng trước (đã kịp "về" TK chung) — áp dụng cho
+    // CẢ doanh thu của mình lẫn doanh thu seller (cùng 1 cổng thanh toán,
+    // cùng độ trễ). Doanh thu/net-remit seller ỔN ĐỊNH mỗi tháng nên tra cứu
+    // lại tháng trước = chính nó (không cần mảng lookback riêng như revenue).
+    const ownUsableRevenueCash = m > delayMonths ? (revenueByMonth[m - delayMonths] || 0) : 0;
+    const sellerUsableRevenueCash = m > delayMonths ? sellerAgg.revenue : 0;
+    const usableRevenueCash = ownUsableRevenueCash + sellerUsableRevenueCash;
+    // COGS hộ seller: ứng trả NGAY khi phát sinh đơn (giống cách trả COGS của
+    // mảng chính), KHÔNG chờ độ trễ. Net remit trả seller: CHỜ độ trễ y hệt
+    // mảng chính (chỉ trả khi lô doanh thu tương ứng đã "về" TK chung).
+    const sellerCogsCost = sellerAgg.cogsCost;
+    const sellerNetRemitPaid = m > delayMonths ? sellerAgg.netRemit : 0;
+    const cashOutflow = variableCost + fixedOverheadMonthly + headcountMonthly + oneTimeSetup + sellerCogsCost + sellerNetRemitPaid;
     const netCashMovement = usableRevenueCash - cashOutflow;
 
     cashBalance = (m === 1 ? totalInvestment : cashBalance) + netCashMovement;
@@ -196,20 +228,27 @@ function calcModel(s, scenarioKey) {
       minCashNoFunding = cashBalanceNoFunding;
       minCashNoFundingMonth = m;
     }
-    cashInTransit = cashInTransit + revenue - usableRevenueCash; // luỹ kế tiền chưa "về" TK chung
+    const totalRevenueCollected = revenue + sellerAgg.revenue; // tổng tiền thu qua cổng thanh toán tháng này (của mình + hộ seller)
+    cashInTransit = cashInTransit + totalRevenueCollected - usableRevenueCash; // luỹ kế tiền chưa "về" TK chung
     cumulativeNetIncome += accrualNetIncome; // dồn tích — không phụ thuộc độ trễ chuyển tiền
+    // Nợ phải trả seller: tăng mỗi tháng theo net remit MỚI phát sinh (mình
+    // đã nhận trách nhiệm trả ngay khi bán, dù tiền seller chưa "về"), giảm
+    // khi THỰC CHUYỂN tiền cho seller (sellerNetRemitPaid).
+    sellerPayable = sellerPayable + sellerAgg.netRemit - sellerNetRemitPaid;
 
     const paidInCapital = totalInvestment;
     const retainedEarnings = cumulativeNetIncome;
     const totalEquity = paidInCapital + retainedEarnings;
-    const totalLiabilities = 0;
+    const totalLiabilities = sellerPayable;
     // Tài sản = tiền tại TK chung (đã tiêu được) + tiền đang trên đường về từ
-    // TK nhận doanh thu. Không tồn kho (dropship), không AR khách hàng (trả
-    // trước) — nhưng CÓ khoản tương đương AR nội bộ do độ trễ chuyển tiền.
+    // TK nhận doanh thu (của mình + hộ seller). Không tồn kho (dropship),
+    // không AR khách hàng (trả trước) — nhưng CÓ khoản tương đương AR nội bộ
+    // do độ trễ chuyển tiền, và CÓ nợ phải trả seller (totalLiabilities).
     const totalAssets = cashBalance + cashInTransit;
 
     months.push({
-      m, ordersPerDay, orders, revenue, cogs, ads, paymentFee, returns, variableCost, grossProfit,
+      m, ordersPerDay, orders, revenue, variableCost, grossProfit,
+      sellerRevenue: sellerAgg.revenue, sellerCogsCost, sellerFeeRevenue, sellerNetRemitPaid,
       fixedOverheadMonthly, headcountMonthly, oneTimeSetup, ebitda, accrualNetIncome,
       usableRevenueCash, cashOutflow, netCashMovement, cashBalance, cashBalanceNoFunding, cashInTransit,
       paidInCapital, retainedEarnings, totalEquity, totalLiabilities, totalAssets
@@ -220,12 +259,12 @@ function calcModel(s, scenarioKey) {
     const acc = monthsSlice.reduce((a, mo) => {
       a.orders += mo.orders;
       a.revenue += mo.revenue;
-      a.cogs += mo.cogs;
-      a.ads += mo.ads;
-      a.paymentFee += mo.paymentFee;
-      a.returns += mo.returns;
       a.variableCost += mo.variableCost;
       a.grossProfit += mo.grossProfit;
+      a.sellerRevenue += mo.sellerRevenue;
+      a.sellerCogsCost += mo.sellerCogsCost;
+      a.sellerFeeRevenue += mo.sellerFeeRevenue;
+      a.sellerNetRemitPaid += mo.sellerNetRemitPaid;
       a.fixedOverheadMonthly += mo.fixedOverheadMonthly;
       a.headcountMonthly += mo.headcountMonthly;
       a.oneTimeSetup += mo.oneTimeSetup;
@@ -235,7 +274,7 @@ function calcModel(s, scenarioKey) {
       a.cashOutflow += mo.cashOutflow;
       a.netCashMovement += mo.netCashMovement;
       return a;
-    }, { orders: 0, revenue: 0, cogs: 0, ads: 0, paymentFee: 0, returns: 0, variableCost: 0, grossProfit: 0, fixedOverheadMonthly: 0, headcountMonthly: 0, oneTimeSetup: 0, ebitda: 0, accrualNetIncome: 0, usableRevenueCash: 0, cashOutflow: 0, netCashMovement: 0 });
+    }, { orders: 0, revenue: 0, variableCost: 0, grossProfit: 0, sellerRevenue: 0, sellerCogsCost: 0, sellerFeeRevenue: 0, sellerNetRemitPaid: 0, fixedOverheadMonthly: 0, headcountMonthly: 0, oneTimeSetup: 0, ebitda: 0, accrualNetIncome: 0, usableRevenueCash: 0, cashOutflow: 0, netCashMovement: 0 });
     acc.endingCash = monthsSlice[monthsSlice.length - 1].cashBalance;
     acc.endingCashInTransit = monthsSlice[monthsSlice.length - 1].cashInTransit;
     acc.ebitdaMargin = acc.revenue !== 0 ? acc.ebitda / acc.revenue : 0;

@@ -84,19 +84,17 @@ const PIE_OVERFLOW_COLOR = "#898781";
 /* ---------------------------------------------------------------------------
    Simple field bindings (input id <-> state path).
    Lưu ý: mọi field %/tỷ giá trong DEFAULTS đã lưu ở dạng số nguyên đọc được
-   (vd cogsPct = 25 nghĩa là 25%, KHÔNG phải 0.25) — calcModel tự chia /100.
+   (vd variableCosts[i].pct = 25 nghĩa là 25%, KHÔNG phải 0.25) — calcModel
+   tự chia /100.
    Nên binding ở đây không cần nhân/chia 100 như model God's Eyes cũ.
    --------------------------------------------------------------------------- */
 const SIMPLE_FIELDS = [
   { id: "baselineOrdersPerDay", path: "volume.baselineOrdersPerDay" },
   { id: "monthlyGrowthPct", path: "volume.monthlyGrowthPct" },
   { id: "aov", path: "revenue.aov" },
-  { id: "cogsPct", path: "costRates.cogsPct" },
-  { id: "adsPct", path: "costRates.adsPct" },
-  { id: "paymentFeePct", path: "costRates.paymentFeePct" },
-  { id: "returnsPct", path: "costRates.returnsPct" },
   { id: "cashConversionDays", path: "capital.cashConversionDays" },
   { id: "maxAvailable", path: "capital.maxAvailable" },
+  { id: "sellerServiceFeePct", path: "sellerService.feePct" },
   { id: "conservativeAdj", path: "scenario.conservativeAdj" },
   { id: "optimisticAdj", path: "scenario.optimisticAdj" },
   { id: "usdToVnd", path: "fx.usdToVnd" },
@@ -176,11 +174,39 @@ function renderShareholderRows() {
   `).join("");
 }
 
+function renderVariableCostRows() {
+  const tbody = document.getElementById("variableCostRows");
+  if (!tbody) return;
+  tbody.innerHTML = state.variableCosts.map((row, i) => `
+    <tr>
+      <td><input type="text" data-list="variableCosts" data-index="${i}" data-field="label" value="${escapeHtml(row.label)}"></td>
+      <td class="col-count"><input type="number" step="0.5" data-list="variableCosts" data-index="${i}" data-field="pct" value="${roundForInput(row.pct)}"></td>
+      <td class="col-remove"><button class="row-remove-btn" data-remove="variableCosts" data-index="${i}" type="button" title="Xoá dòng">✕</button></td>
+    </tr>
+  `).join("");
+}
+
+function renderSellerRows() {
+  const tbody = document.getElementById("sellerRows");
+  if (!tbody) return;
+  tbody.innerHTML = state.sellerService.sellers.map((row, i) => `
+    <tr>
+      <td><input type="text" data-list="sellers" data-index="${i}" data-field="name" value="${escapeHtml(row.name)}"></td>
+      <td class="col-count"><input type="number" step="1" data-list="sellers" data-index="${i}" data-field="ordersPerDay" value="${roundForInput(row.ordersPerDay)}"></td>
+      <td class="col-rate"><input type="number" step="1" data-list="sellers" data-index="${i}" data-field="aov" value="${roundForInput(row.aov)}"></td>
+      <td class="col-count"><input type="number" step="0.5" data-list="sellers" data-index="${i}" data-field="cogsPct" value="${roundForInput(row.cogsPct)}"></td>
+      <td class="col-remove"><button class="row-remove-btn" data-remove="sellers" data-index="${i}" type="button" title="Xoá dòng">✕</button></td>
+    </tr>
+  `).join("");
+}
+
 function listArrayFor(list) {
   if (list === "fixedOverhead") return state.fixedOverhead;
   if (list === "oneTimeSetup") return state.oneTimeSetup;
   if (list === "headcount") return state.headcount;
   if (list === "shareholders") return state.capital.shareholders;
+  if (list === "variableCosts") return state.variableCosts;
+  if (list === "sellers") return state.sellerService.sellers;
   return null;
 }
 
@@ -219,6 +245,8 @@ function bindDynamicTableEvents() {
     else if (list === "oneTimeSetup") renderOneTimeSetupRows();
     else if (list === "headcount") renderHeadcountRows();
     else if (list === "shareholders") renderShareholderRows();
+    else if (list === "variableCosts") renderVariableCostRows();
+    else if (list === "sellers") renderSellerRows();
     recalcAndRender();
   });
 
@@ -240,6 +268,16 @@ function bindDynamicTableEvents() {
   document.getElementById("addShareholderRow").addEventListener("click", () => {
     state.capital.shareholders.push({ name: "Cổ đông mới", contribution: 0, equityPct: 0 });
     renderShareholderRows();
+    recalcAndRender();
+  });
+  document.getElementById("addVariableCostRow").addEventListener("click", () => {
+    state.variableCosts.push({ label: "Khoản mục mới", pct: 0 });
+    renderVariableCostRows();
+    recalcAndRender();
+  });
+  document.getElementById("addSellerRow").addEventListener("click", () => {
+    state.sellerService.sellers.push({ name: "Seller mới", ordersPerDay: 0, aov: 30, cogsPct: 25 });
+    renderSellerRows();
     recalcAndRender();
   });
 }
@@ -268,6 +306,27 @@ function updateShareholderTotalsDisplay() {
   const ok = Math.abs(totalEquityPct - 100) < 0.5;
   el.textContent = `Tổng vốn góp: ${formatMoney(totalContribution)} — Tổng tỷ lệ cổ phần: ${totalEquityPct.toFixed(1)}% ${ok ? "✓ (đủ 100%)" : "⚠ phải bằng 100%"}`;
   el.className = "mix-total-row" + (ok ? "" : " warn");
+}
+function updateVariableCostTotalsDisplay() {
+  const el = document.getElementById("variableCostTotalRow");
+  if (!el) return;
+  const totalPct = state.variableCosts.reduce((s, r) => s + Number(r.pct || 0), 0);
+  el.textContent = `Tổng chi phí biến đổi: ${totalPct.toFixed(1)}% doanh thu`;
+}
+function updateSellerTotalsDisplay() {
+  const el = document.getElementById("sellerTotalRow");
+  if (!el) return;
+  const sellers = state.sellerService.sellers;
+  const feePct = Number(state.sellerService.feePct || 0);
+  let revenue = 0, cogsCost = 0;
+  sellers.forEach(sel => {
+    const rev = Number(sel.ordersPerDay || 0) * DAYS_PER_MONTH * Number(sel.aov || 0);
+    revenue += rev;
+    cogsCost += rev * Number(sel.cogsPct || 0) / 100;
+  });
+  const feeRevenue = revenue * feePct / 100;
+  const netRemit = revenue - cogsCost - feeRevenue;
+  el.textContent = `Ước tính/tháng (kịch bản Base, chưa tính độ trễ chuyển tiền): Doanh thu seller ${formatMoney(revenue)} — Phí dịch vụ (thu nhập của mình) ${formatMoney(feeRevenue)} — Ứng trả nhập hàng hộ ${formatMoney(cogsCost)} — Chuyển về seller ${formatMoney(netRemit)}`;
 }
 
 function renderVolumeBoxes(model) {
@@ -365,22 +424,27 @@ function renderFundingCallout(model) {
 /* ---------------------------------------------------------------------------
    Monthly P&L table — 12 tháng + cột "Cả năm"
    --------------------------------------------------------------------------- */
-const TABLE_ROWS = [
+/* Bảng P&L được ghép từ 3 phần: TABLE_ROWS_BEFORE_VC (đến hết Doanh thu),
+   rồi các dòng chi phí biến đổi ĐỘNG (từ state.variableCosts — số dòng và
+   nhãn tuỳ người dùng thêm/bớt), rồi TABLE_ROWS_AFTER_VC (từ Lợi nhuận gộp
+   trở đi). Vì variableCosts[i].pct là % cố định của doanh thu mỗi tháng,
+   số tiền từng dòng/tháng và cột "Cả năm" tính thẳng từ pct x revenue,
+   không cần calcModel lưu riêng từng khoản trong mỗi tháng. */
+const TABLE_ROWS_BEFORE_VC = [
   { key: "ordersPerDay", label: "Đơn/ngày", fmt: "num0", noAnnual: true },
   { key: "orders", label: "Số đơn/tháng", fmt: "num0" },
-  { key: "revenue", label: "Doanh thu", fmt: "money", bold: true },
-  { key: "cogs", label: "Giá vốn (COGS)", fmt: "money", sub: true },
-  { key: "ads", label: "Quảng cáo (Ads)", fmt: "money", sub: true },
-  { key: "paymentFee", label: "Phí thanh toán", fmt: "money", sub: true },
-  { key: "returns", label: "Hoàn/huỷ đơn", fmt: "money", sub: true },
+  { key: "revenue", label: "Doanh thu", fmt: "money", bold: true }
+];
+const TABLE_ROWS_AFTER_VC = [
   { key: "grossProfit", label: "Lợi nhuận gộp", fmt: "money", signed: true },
+  { key: "sellerFeeRevenue", label: "Doanh thu dịch vụ seller (phí)", fmt: "money" },
   { key: "fixedOverheadMonthly", label: "Chi phí cố định", fmt: "money" },
   { key: "headcountMonthly", label: "Nhân sự", fmt: "money" },
   { key: "ebitda", label: "EBITDA", fmt: "money", signed: true, bold: true },
   { key: "oneTimeSetup", label: "Chi phí thiết lập một lần", fmt: "money" },
   { key: "accrualNetIncome", label: "Lợi nhuận ròng (dồn tích, không tính độ trễ)", fmt: "money", signed: true, bold: true },
-  { key: "usableRevenueCash", label: "Tiền về TK chung, dùng được (đã trừ độ trễ)", fmt: "money", sub: true },
-  { key: "cashOutflow", label: "Tổng chi tiền mặt trong tháng", fmt: "money", sub: true },
+  { key: "usableRevenueCash", label: "Tiền về TK chung, dùng được (đã trừ độ trễ — gồm cả doanh thu seller)", fmt: "money", sub: true },
+  { key: "cashOutflow", label: "Tổng chi tiền mặt trong tháng (gồm ứng nhập hàng + trả seller)", fmt: "money", sub: true },
   { key: "netCashMovement", label: "Dòng tiền thực tế trong tháng (Net Cash Movement)", fmt: "money", signed: true, bold: true },
   { key: "cashBalance", label: "Tiền mặt tại TK chung, luỹ kế (có vốn góp)", fmt: "money", bold: true, signed: true, isEnding: true }
 ];
@@ -394,6 +458,15 @@ function cellClass(v, signed) {
   return v < 0 ? "negative" : "positive";
 }
 
+function buildTableRowHtml(label, values, annualVal, opts) {
+  opts = opts || {};
+  const cells = values.map(v => `<td class="${cellClass(v, opts.signed)}"${opts.bold ? ' style="font-weight:700"' : ""}>${formatCell(v, opts.fmt)}</td>`).join("");
+  const annualCell = opts.noAnnual
+    ? `<td class="col-annual">—</td>`
+    : `<td class="col-annual ${cellClass(annualVal, opts.signed)}">${formatCell(annualVal, opts.fmt)}</td>`;
+  return `<tr${opts.sub ? ' class="sub-row"' : ""}><td>${escapeHtml(label)}</td>${cells}${annualCell}</tr>`;
+}
+
 function renderMonthlyTable(model) {
   const thead = document.getElementById("monthlyTableHead");
   const tbody = document.getElementById("monthlyTableBody");
@@ -402,20 +475,25 @@ function renderMonthlyTable(model) {
 
   thead.innerHTML = `<tr><th>Chỉ số</th>${months.map(m => `<th>Th.${m.m}</th>`).join("")}<th class="col-annual">Cả năm</th></tr>`;
 
-  tbody.innerHTML = TABLE_ROWS.map(row => {
-    const cells = months.map(m => {
-      const v = m[row.key];
-      return `<td class="${cellClass(v, row.signed)}"${row.bold ? ' style="font-weight:700"' : ""}>${formatCell(v, row.fmt)}</td>`;
-    }).join("");
-    let annualCell;
-    if (row.noAnnual) {
-      annualCell = `<td class="col-annual">—</td>`;
-    } else {
-      const annualVal = row.isEnding ? model.total.endingCash : model.total[row.key];
-      annualCell = `<td class="col-annual ${cellClass(annualVal, row.signed)}">${formatCell(annualVal, row.fmt)}</td>`;
-    }
-    return `<tr${row.sub ? ' class="sub-row"' : ""}><td>${row.label}</td>${cells}${annualCell}</tr>`;
+  const beforeHtml = TABLE_ROWS_BEFORE_VC.map(row => {
+    const values = months.map(m => m[row.key]);
+    const annualVal = row.isEnding ? model.total.endingCash : model.total[row.key];
+    return buildTableRowHtml(row.label, values, annualVal, row);
   }).join("");
+
+  const variableCostHtml = state.variableCosts.map(item => {
+    const values = months.map(m => Number(item.pct || 0) / 100 * m.revenue);
+    const annualVal = Number(item.pct || 0) / 100 * model.total.revenue;
+    return buildTableRowHtml(item.label, values, annualVal, { fmt: "money", sub: true });
+  }).join("");
+
+  const afterHtml = TABLE_ROWS_AFTER_VC.map(row => {
+    const values = months.map(m => m[row.key]);
+    const annualVal = row.isEnding ? model.total.endingCash : model.total[row.key];
+    return buildTableRowHtml(row.label, values, annualVal, row);
+  }).join("");
+
+  tbody.innerHTML = beforeHtml + variableCostHtml + afterHtml;
 
   if (tfoot) tfoot.innerHTML = "";
 }
@@ -428,7 +506,7 @@ const BALANCE_SHEET_ROWS = [
   { key: "cashBalance", label: "TÀI SẢN — Tiền mặt tại TK chung (đã tiêu được)", signed: true },
   { key: "cashInTransit", label: "TÀI SẢN — Tiền đang chuyển từ TK nhận doanh thu" },
   { key: "totalAssets", label: "TỔNG TÀI SẢN", bold: true, signed: true },
-  { key: "totalLiabilities", label: "NỢ PHẢI TRẢ" },
+  { key: "totalLiabilities", label: "NỢ PHẢI TRẢ (phải trả seller, dịch vụ hạ tầng)" },
   { key: "paidInCapital", label: "VỐN CSH — Vốn góp (Paid-in capital)" },
   { key: "retainedEarnings", label: "VỐN CSH — Lợi nhuận giữ lại (Retained earnings)", signed: true },
   { key: "totalEquity", label: "TỔNG VỐN CHỦ SỞ HỮU", bold: true, signed: true }
@@ -589,16 +667,16 @@ function donutSlicePath(cx, cy, rOuter, rInner, startAngle, endAngle) {
 }
 
 function computeCostBreakdown(total) {
-  const items = [
-    { label: "Giá vốn hàng bán (COGS)", value: total.cogs },
-    { label: "Quảng cáo (Ads)", value: total.ads },
-    { label: "Phí thanh toán", value: total.paymentFee },
-    { label: "Hoàn/huỷ đơn", value: total.returns },
+  const variableItems = (state.variableCosts || []).map(item => ({
+    label: item.label,
+    value: Number(item.pct || 0) / 100 * total.revenue
+  }));
+  const items = variableItems.concat([
     { label: "Chi phí cố định", value: total.fixedOverheadMonthly },
     { label: "Nhân sự", value: total.headcountMonthly },
     { label: "Thiết lập một lần", value: total.oneTimeSetup },
     { label: "Lợi nhuận ròng (Net Profit)", value: total.accrualNetIncome }
-  ];
+  ]);
   const visible = items.filter(i => i.value > 0.5);
   const totalRevenue = total.revenue;
   visible.forEach(i => { i.pct = totalRevenue > 0 ? i.value / totalRevenue : 0; });
@@ -669,10 +747,12 @@ function renderCharts(model) {
 function recalcAndRender() {
   const model = calcModel(state, currentScenario);
   renderVolumeBoxes(model);
+  updateVariableCostTotalsDisplay();
   updateFixedTotalDisplay();
   updateOneTimeTotalDisplay();
   updateHeadcountTotalDisplay();
   updateShareholderTotalsDisplay();
+  updateSellerTotalsDisplay();
   renderKPIs(model);
   renderFundingCallout(model);
   renderMonthlyTable(model);
@@ -883,10 +963,12 @@ async function saveAsDefault() {
    Init
    --------------------------------------------------------------------------- */
 function fullRenderAssumptionInputs() {
+  renderVariableCostRows();
   renderFixedOverheadRows();
   renderOneTimeSetupRows();
   renderHeadcountRows();
   renderShareholderRows();
+  renderSellerRows();
   setSimpleFieldValues();
 }
 

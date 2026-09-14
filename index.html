@@ -78,7 +78,7 @@
   <!-- Balance Sheet -->
   <section class="table-card">
     <h3>Bảng cân đối kế toán theo tháng (Balance Sheet)</h3>
-    <p class="table-note">Model đơn giản: không khấu hao/lãi vay/thuế. Không tồn kho (dropship) và không có khoản phải thu từ khách hàng (khách trả trước) — nhưng CÓ khoản tương đương AR nội bộ: "Tiền đang chuyển từ TK nhận doanh thu" (xem mục G — Vòng quay vốn), vì doanh thu thu về ở Angola cần thời gian mới "về" được TK chung để chi tiêu. Tài sản = Tiền mặt tại TK chung + Tiền đang chuyển.</p>
+    <p class="table-note">Model đơn giản: không khấu hao/lãi vay/thuế. Không tồn kho (dropship) và không có khoản phải thu từ khách hàng (khách trả trước) — nhưng CÓ khoản tương đương AR nội bộ: "Tiền đang chuyển từ TK nhận doanh thu" (xem mục G — Vòng quay vốn), vì doanh thu thu về ở Angola cần thời gian mới "về" được TK chung để chi tiêu. Tài sản = Tiền mặt tại TK chung + Tiền đang chuyển. Nếu có dùng mục I (Dịch vụ hạ tầng cho seller), "Nợ phải trả" sẽ khác 0 — đó là phần tiền doanh thu seller mình đang giữ hộ, chưa chuyển trả.</p>
     <div class="table-scroll">
       <table id="balanceSheetTable">
         <thead id="balanceSheetHead"></thead>
@@ -129,27 +129,19 @@
       <!-- C. Variable cost rates -->
       <div class="assump-block">
         <h3>C. Chi phí biến đổi (% doanh thu)</h3>
-        <div class="field-grid">
-          <div class="field">
-            <label for="cogsPct">Giá vốn hàng bán — COGS (%)</label>
-            <input type="number" id="cogsPct" step="0.5">
-            <span class="field-note">Đã gồm giá sản phẩm + ship từ Trung Quốc + thuế nhập khẩu (all-in, theo anh Hiếu xác nhận).</span>
-          </div>
-          <div class="field">
-            <label for="adsPct">Ngân sách quảng cáo — Ads (%)</label>
-            <input type="number" id="adsPct" step="0.5">
-          </div>
-          <div class="field">
-            <label for="paymentFeePct">Phí thanh toán (GPayGo + FX markup, %)</label>
-            <input type="number" id="paymentFeePct" step="0.1">
-            <span class="field-note">Ước tính tham khảo thị trường Angola (2,5-4% phí giao dịch + phụ phí FX) — GPayGo chưa công bố biểu phí chính thức.</span>
-          </div>
-          <div class="field">
-            <label for="returnsPct">Tỷ lệ hoàn/huỷ đơn (%)</label>
-            <input type="number" id="returnsPct" step="0.5">
-            <span class="field-note">Mặc định 0% — khách thanh toán trước rồi mới ship, theo xác nhận của anh Hiếu.</span>
-          </div>
-        </div>
+        <table class="dyn-table" id="variableCostTable">
+          <thead>
+            <tr>
+              <th>Khoản mục</th>
+              <th class="col-count">% doanh thu</th>
+              <th class="col-remove"></th>
+            </tr>
+          </thead>
+          <tbody id="variableCostRows"></tbody>
+        </table>
+        <button class="add-row-btn" id="addVariableCostRow" type="button">+ Thêm khoản mục</button>
+        <div class="mix-total-row" id="variableCostTotalRow">—</div>
+        <span class="field-note">Bảng động — thêm/bớt/đổi tên khoản mục tự do vì anh Hiếu chưa nắm hết các loại chi phí biến đổi có thể phát sinh. Mặc định gồm 4 khoản: COGS (đã gồm giá sản phẩm + ship từ Trung Quốc + thuế nhập khẩu, all-in), Ads, phí thanh toán (ước tính tham khảo thị trường Angola — GPayGo chưa công bố biểu phí chính thức), và hoàn/huỷ đơn (mặc định 0% vì khách thanh toán trước rồi mới ship).</span>
       </div>
 
       <!-- D. Fixed overhead -->
@@ -244,9 +236,35 @@
         </div>
       </div>
 
-      <!-- I. Scenario -->
+      <!-- I. Seller service -->
       <div class="assump-block">
-        <h3>I. Điều chỉnh kịch bản (áp lên volume đơn hàng)</h3>
+        <h3>I. Dịch vụ hạ tầng cho seller khác</h3>
+        <div class="field-grid">
+          <div class="field">
+            <label for="sellerServiceFeePct">Phí dịch vụ trên doanh thu seller (%)</label>
+            <input type="number" id="sellerServiceFeePct" step="0.5">
+          </div>
+        </div>
+        <table class="dyn-table" id="sellerTable" style="margin-top:10px;">
+          <thead>
+            <tr>
+              <th>Seller</th>
+              <th class="col-count">Đơn/ngày (ước tính)</th>
+              <th class="col-rate">AOV ($/đơn)</th>
+              <th class="col-count">% nhập hàng (COGS)</th>
+              <th class="col-remove"></th>
+            </tr>
+          </thead>
+          <tbody id="sellerRows"></tbody>
+        </table>
+        <button class="add-row-btn" id="addSellerRow" type="button">+ Thêm seller</button>
+        <div class="mix-total-row" id="sellerTotalRow">—</div>
+        <span class="field-note">Cơ chế: mình thu hộ TOÀN BỘ doanh thu của seller qua cùng cổng thanh toán (cùng chịu độ trễ ~vòng quay vốn ở mục G), dùng tiền đó ứng trả nhập hàng NGAY khi phát sinh đơn, trừ phí dịch vụ (thu nhập của mình, cộng vào EBITDA), rồi chuyển phần còn lại về cho seller bằng tiền Việt Nam — seller cũng chờ cùng độ trễ đó mới nhận được tiền. Tiền giữ hộ seller trong lúc chờ tạo ra khoản "Nợ phải trả" trên Balance Sheet. Seller giả định hoạt động ổn định (KHÔNG tăng trưởng theo tháng) ngay từ Tháng 1 — sớm hơn mảng tự bán hàng của mình (bắt đầu Tháng 2). Mỗi seller có AOV + % nhập hàng riêng vì có thể bán sản phẩm khác nhau. Mặc định rỗng — anh Hiếu tự thêm seller thật khi có (dự kiến tối đa ~3 seller).</span>
+      </div>
+
+      <!-- J. Scenario -->
+      <div class="assump-block">
+        <h3>J. Điều chỉnh kịch bản (áp lên volume đơn hàng)</h3>
         <div class="field-grid">
           <div class="field">
             <label for="conservativeAdj">Conservative (%)</label>
@@ -257,12 +275,12 @@
             <input type="number" id="optimisticAdj" step="1">
           </div>
         </div>
-        <span class="field-note">Áp dụng lên đơn/ngày mỗi tháng (kể cả baseline Tháng 2) — giá bán, % chi phí, chi phí cố định giữ nguyên ở cả 3 kịch bản.</span>
+        <span class="field-note">Áp dụng lên đơn/ngày mỗi tháng (kể cả baseline Tháng 2), và CẢ đơn/ngày của từng seller ở mục I — giá bán, % chi phí, chi phí cố định giữ nguyên ở cả 3 kịch bản.</span>
       </div>
 
-      <!-- J. Currency / FX -->
+      <!-- K. Currency / FX -->
       <div class="assump-block">
-        <h3>J. Tỷ giá quy đổi</h3>
+        <h3>K. Tỷ giá quy đổi</h3>
         <div class="field-grid">
           <div class="field">
             <label for="usdToVnd">1 USD = ? VND</label>
@@ -276,9 +294,9 @@
         <span class="field-note">Toàn bộ tính toán nội bộ bằng USD — tỷ giá chỉ dùng để hiển thị. Mặc định lấy tỷ giá tham khảo ngày 26/8/2026, anh cập nhật lại khi cần số mới nhất.</span>
       </div>
 
-      <!-- K. Admin — Save as Default -->
+      <!-- L. Admin — Save as Default -->
       <div class="assump-block">
-        <h3>K. Admin — Save as Default</h3>
+        <h3>L. Admin — Save as Default</h3>
 
         <div id="adminLockedView">
           <span class="field-note">Khoá bằng PIN (chỉ là rào cản nhẹ — xem ghi chú bên dưới). Nhập PIN để hiện điều khiển lưu lên GitHub.</span>
