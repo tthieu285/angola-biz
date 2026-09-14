@@ -91,7 +91,7 @@ const DEFAULTS = {
   ],
   "headcount": [],
   "capital": {
-    "cashConversionDays": 30,
+    "cashConversionDays": 7,
     "maxAvailable": 10000,
     "shareholders": [
       {
