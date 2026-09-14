@@ -78,27 +78,95 @@ const DEFAULTS = {
     "aov": 30
   },
   "variableCosts": [
-    { "label": "Giá vốn hàng bán (COGS)", "pct": 25 },
-    { "label": "Quảng cáo (Ads)", "pct": 35 },
-    { "label": "Phí thanh toán (GPayGo + FX markup)", "pct": 4 },
-    { "label": "Hoàn/huỷ đơn", "pct": 0 }
+    {
+      "label": "Giá vốn hàng bán (COGS)",
+      "pct": 25
+    },
+    {
+      "label": "Quảng cáo (Ads)",
+      "pct": 35
+    },
+    {
+      "label": "Phi AppyPay",
+      "pct": 0.4
+    },
+    {
+      "label": "Phi Multicaixa/EMIS",
+      "pct": 4
+    },
+    {
+      "label": "Phí chuyển tiền về VN",
+      "pct": 2
+    }
   ],
   "fixedOverhead": [
-    { "label": "VPS hosting (WooCommerce)", "amount": 35 },
-    { "label": "Công cụ/subscription khác (email, analytics...)", "amount": 0 }
+    {
+      "label": "VPS hosting (WooCommerce)",
+      "amount": 35
+    },
+    {
+      "label": "Công cụ/subscription khác (email, analytics...)",
+      "amount": 0
+    }
   ],
   "oneTimeSetup": [
-    { "label": "Đăng ký công ty tại Angola (INAPEM, pháp lý, công chứng)", "amount": 750, "month": 1 },
-    { "label": "Mở tài khoản ngân hàng doanh nghiệp Angola", "amount": 100, "month": 1 },
-    { "label": "Domain (.com / .co.ao, 1 năm)", "amount": 15, "month": 1 }
+    {
+      "label": "Đăng ký công ty tại Angola (INAPEM, pháp lý, công chứng)",
+      "amount": 750,
+      "month": 1
+    },
+    {
+      "label": "Mở tài khoản ngân hàng doanh nghiệp Angola",
+      "amount": 100,
+      "month": 1
+    },
+    {
+      "label": "Domain (.com / .co.ao, 1 năm)",
+      "amount": 15,
+      "month": 1
+    }
   ],
-  "headcount": [],
+  "headcount": [
+    {
+      "role": "Giám đốc",
+      "count": 1,
+      "monthlyRate": 1000
+    },
+    {
+      "role": "Quản lý",
+      "count": 1,
+      "monthlyRate": 1000
+    },
+    {
+      "role": "Fulfillment",
+      "count": 1,
+      "monthlyRate": 600
+    },
+    {
+      "role": "CS",
+      "count": 1,
+      "monthlyRate": 600
+    }
+  ],
   "capital": {
-    "cashConversionDays": 30,
+    "cashConversionDays": 7,
     "maxAvailable": 10000,
     "shareholders": [
-      { "name": "Hiếu", "contribution": 750, "equityPct": 50 },
-      { "name": "Tùng", "contribution": 750, "equityPct": 50 }
+      {
+        "name": "Hiếu",
+        "contribution": 1000,
+        "equityPct": 34
+      },
+      {
+        "name": "Tùng",
+        "contribution": 1000,
+        "equityPct": 33
+      },
+      {
+        "name": "Hoàng",
+        "contribution": 1000,
+        "equityPct": 33
+      }
     ]
   },
   "scenario": {
@@ -107,7 +175,14 @@ const DEFAULTS = {
   },
   "sellerService": {
     "feePct": 10,
-    "sellers": []
+    "sellers": [
+      {
+        "name": "Hải béo",
+        "ordersPerDay": 50,
+        "aov": 30,
+        "cogsPct": 25
+      }
+    ]
   }
 };
 /* === DEFAULTS:END === */
