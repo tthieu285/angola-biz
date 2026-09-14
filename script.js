@@ -151,12 +151,12 @@ const DEFAULTS = {
     },
     {
       "role": "Fulfillment",
-      "count": 1,
+      "count": 2,
       "monthlyRate": 600
     },
     {
       "role": "CS",
-      "count": 1,
+      "count": 2,
       "monthlyRate": 600
     },
     {
