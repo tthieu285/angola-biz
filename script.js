@@ -74,8 +74,8 @@ const DAYS_PER_MONTH = 30; // giả định chung, không neo theo lịch thật
    sẽ ghi đè lại toàn bộ object này. === */
 const DEFAULTS = {
   "fx": {
-    "usdToVnd": 26098,
-    "usdToAoa": 916.1
+    "usdToVnd": 23150,
+    "usdToAoa": 1043
   },
   "volume": {
     "baselineOrdersPerDay": 20,
