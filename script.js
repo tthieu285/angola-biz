@@ -140,11 +140,6 @@ const DEFAULTS = {
   ],
   "headcount": [
     {
-      "role": "Giám đốc",
-      "count": 1,
-      "monthlyRate": 1000
-    },
-    {
       "role": "Quản lý",
       "count": 1,
       "monthlyRate": 1000
