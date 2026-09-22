@@ -93,7 +93,7 @@ const DEFAULTS = {
     "usdToAoa": 1043
   },
   "volume": {
-    "startMonth": 2,
+    "startMonth": 7,
     "baselineOrdersPerDay": 20,
     "monthlyGrowthPct": 10
   },
@@ -123,7 +123,7 @@ const DEFAULTS = {
     },
     {
       "label": "Phí chuyển tiền về VN",
-      "pct": 2,
+      "pct": 0,
       "ownOnly": false
     }
   ],
@@ -159,7 +159,7 @@ const DEFAULTS = {
       "role": "Quản lý",
       "count": 1,
       "monthlyRate": 1000,
-      "startMonth": 1
+      "startMonth": 7
     },
     {
       "role": "Fulfillment",
@@ -176,20 +176,20 @@ const DEFAULTS = {
     {
       "role": "Lương Hiếu",
       "count": 1,
-      "monthlyRate": 2000,
-      "startMonth": 1
+      "monthlyRate": 1200,
+      "startMonth": 4
     },
     {
       "role": "Lương Tùng",
       "count": 1,
-      "monthlyRate": 2000,
-      "startMonth": 1
+      "monthlyRate": 1200,
+      "startMonth": 4
     },
     {
       "role": "Lương Hoàng",
       "count": 1,
-      "monthlyRate": 2000,
-      "startMonth": 1
+      "monthlyRate": 1200,
+      "startMonth": 4
     }
   ],
   "capital": {
