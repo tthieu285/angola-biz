@@ -162,14 +162,14 @@ const DEFAULTS = {
       "startMonth": 7
     },
     {
-      "role": "Fulfillment",
-      "count": 2,
+      "role": "Fulfillment 1",
+      "count": 1,
       "monthlyRate": 600,
       "startMonth": 1
     },
     {
-      "role": "CS",
-      "count": 2,
+      "role": "CS 1",
+      "count": 1,
       "monthlyRate": 600,
       "startMonth": 1
     },
@@ -190,6 +190,18 @@ const DEFAULTS = {
       "count": 1,
       "monthlyRate": 1200,
       "startMonth": 4
+    },
+    {
+      "role": "Fulfillment 2",
+      "count": 1,
+      "monthlyRate": 600,
+      "startMonth": 7
+    },
+    {
+      "role": "CS 2",
+      "count": 1,
+      "monthlyRate": 600,
+      "startMonth": 7
     }
   ],
   "capital": {
