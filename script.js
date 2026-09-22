@@ -8,18 +8,29 @@
    MODEL HORIZON: 1 năm / 12 tháng (Year 1 — mô hình DROPSHIP test thị trường).
    Year 2 (nhập hàng/tồn kho, website làm kênh chủ lực) NGOÀI SCOPE bản này.
 
-   Tháng 1 = tháng dựng hạ tầng (đăng ký công ty tại Angola, mở tài khoản ngân
-   hàng, dựng site WooCommerce + GPayGo, test sản phẩm) — mặc định 0 đơn hàng.
-   Tháng 2 = mốc validate đầu tiên (đơn/ngày = baselineOrdersPerDay).
-   Tháng 3-12 = tăng trưởng theo bậc mỗi tháng (monthlyGrowthPct), mặc định để
-   đạt đúng mốc 200 đơn/ngày vào tháng 12 (~25,89%/tháng từ baseline 20 đơn/ngày).
+   TỰ BÁN HÀNG — THÁNG BẮT ĐẦU (CR-01, `volume.startMonth`, mặc định Tháng 2):
+   trước tháng bắt đầu là giai đoạn dựng hạ tầng (đăng ký công ty tại Angola,
+   mở tài khoản ngân hàng, dựng site WooCommerce + AppyPay/EMIS, test sản
+   phẩm) — 0 đơn hàng. Từ tháng bắt đầu trở đi = baseline (đơn/ngày =
+   baselineOrdersPerDay), các tháng sau đó tăng trưởng theo bậc mỗi tháng
+   (monthlyGrowthPct, mặc định 10%/tháng). Tháng bắt đầu do anh Hiếu chọn tự
+   do (không còn cố định Tháng 2) — từ 2026-09-22, chiến lược là làm dịch vụ
+   seller trước, dời tự bán hàng lại vài tháng (xem mục DỊCH VỤ SELLER).
 
    VÒNG QUAY VỐN (cash conversion cycle): doanh thu thu về ở TK nhận tiền tại
-   Angola (GPayGo) không dùng trực tiếp để trả ads/nhập hàng được ngay — mất
-   `capital.cashConversionDays` (mặc định 30 ngày ≈ 1 tháng) trước khi "về" TK
-   chung để chi tiêu. EBITDA/Net income vẫn tính dồn tích (accrual, theo tháng
-   phát sinh) — CHỈ dòng tiền thực tế (netCashMovement/cashBalance) bị trễ.
-   Đây là lý do vốn cần ban đầu thực tế lớn hơn nhiều so với nhìn thuần EBITDA.
+   Angola (AppyPay/EMIS) không dùng trực tiếp để trả ads/nhập hàng được ngay —
+   mất `capital.cashConversionDays` (hiện để 7 ngày, quy đổi ra số tháng
+   nguyên gần nhất nên = 0 tháng độ trễ — đã xác nhận với anh Hiếu, xem file
+   MD dự án) trước khi "về" TK chung để chi tiêu. EBITDA/Net income vẫn tính
+   dồn tích (accrual, theo tháng phát sinh) — CHỈ dòng tiền thực tế
+   (netCashMovement/cashBalance) bị trễ. Đây là lý do vốn cần ban đầu thực tế
+   lớn hơn nhiều so với nhìn thuần EBITDA.
+
+   NHÂN SỰ (`headcount`, mục F) — THÁNG BẮT ĐẦU (CR-01, `row.startMonth`, mặc
+   định Tháng 1): mỗi vị trí có tháng bắt đầu riêng — chỉ tính vào chi phí
+   nhân sự/tháng (và do đó EBITDA, dòng tiền) từ tháng đó trở đi. Cho phép mô
+   phỏng đúng kế hoạch tuyển dần theo nhu cầu (vd. Fulfillment/CS chỉ cần khi
+   bắt đầu tự bán hàng, không cần ngay từ đầu).
 
    VỐN GÓP: `capital.shareholders` là bảng động (thêm/bớt cổ đông tự do) —
    mỗi dòng có vốn góp ($) + tỷ lệ cổ phần (%). Tổng vốn góp các dòng = vốn
@@ -49,9 +60,13 @@
    Vì mình cầm giữ hộ tiền seller trong lúc chờ, phát sinh khoản NỢ PHẢI TRẢ
    `sellerPayable` (tăng mỗi tháng theo doanh thu mới phát sinh, giảm khi
    thực chuyển tiền) — đây là lý do `totalLiabilities` không còn luôn = 0.
-   Seller giả định hoạt động ỔN ĐỊNH (không tăng trưởng theo tháng) ngay từ
-   Tháng 1 — khác với mảng chính (Tháng 1 = 0 đơn, tăng trưởng từ Tháng 2).
-   Mỗi seller có AOV + % nhập hàng riêng (sản phẩm có thể khác nhau).
+   Mỗi seller có AOV + % nhập hàng riêng (sản phẩm có thể khác nhau) VÀ
+   THÁNG BẮT ĐẦU riêng (CR-01, `sel.startMonth`, mặc định Tháng 1 — trước đó
+   giả định CỨNG mọi seller hoạt động ngay từ Tháng 1). Từ tháng bắt đầu của
+   từng seller trở đi, seller đó ỔN ĐỊNH (không tăng trưởng theo tháng); các
+   seller có thể vào nền tảng ở các tháng khác nhau (2026-09-22: chiến lược
+   mới là chạy dịch vụ seller trước, dùng phí dịch vụ thu được làm vốn lưu
+   động, rồi mới bắt đầu tự bán hàng — xem `volume.startMonth` ở trên).
    ============================================================================ */
 
 /* ---------------------------------------------------------------------------
@@ -78,6 +93,7 @@ const DEFAULTS = {
     "usdToAoa": 1043
   },
   "volume": {
+    "startMonth": 2,
     "baselineOrdersPerDay": 20,
     "monthlyGrowthPct": 10
   },
@@ -142,32 +158,38 @@ const DEFAULTS = {
     {
       "role": "Quản lý",
       "count": 1,
-      "monthlyRate": 1000
+      "monthlyRate": 1000,
+      "startMonth": 1
     },
     {
       "role": "Fulfillment",
       "count": 2,
-      "monthlyRate": 600
+      "monthlyRate": 600,
+      "startMonth": 1
     },
     {
       "role": "CS",
       "count": 2,
-      "monthlyRate": 600
+      "monthlyRate": 600,
+      "startMonth": 1
     },
     {
       "role": "Lương Hiếu",
       "count": 1,
-      "monthlyRate": 2000
+      "monthlyRate": 2000,
+      "startMonth": 1
     },
     {
       "role": "Lương Tùng",
       "count": 1,
-      "monthlyRate": 2000
+      "monthlyRate": 2000,
+      "startMonth": 1
     },
     {
       "role": "Lương Hoàng",
       "count": 1,
-      "monthlyRate": 2000
+      "monthlyRate": 2000,
+      "startMonth": 1
     }
   ],
   "capital": {
@@ -202,7 +224,8 @@ const DEFAULTS = {
         "name": "Hải béo",
         "ordersPerDay": 50,
         "aov": 25,
-        "cogsPct": 25
+        "cogsPct": 25,
+        "startMonth": 1
       }
     ]
   }
@@ -227,27 +250,45 @@ function scenarioAdjustment(s, scenarioKey) {
   return 0;
 }
 
-/* Đơn/ngày RAW (trước điều chỉnh kịch bản) cho 1 tháng tuyệt đối (1-12).
-   Tháng 1 luôn = 0 (tháng dựng hạ tầng, không phụ thuộc scenario/growth).
-   Tháng 2 = baseline. Tháng 3-12 = baseline x (1+growth)^(m-2), bậc thang theo tháng. */
-function computeRawOrdersPerDay(s, month) {
-  if (month <= 1) return 0;
-  const base = Number(s.volume.baselineOrdersPerDay || 0);
-  const g = Number(s.volume.monthlyGrowthPct || 0) / 100;
-  return base * Math.pow(1 + g, month - 2);
+/* Chuẩn hoá "tháng bắt đầu" (CR-01): ô trống/0/không hợp lệ → dùng mặc định
+   (fallback truyền vào — 2 cho tự bán, 1 cho seller/nhân sự); giá trị < 1 →
+   coi như 1; giá trị > 12 → giữ nguyên (tự nhiên không tháng nào trong Năm 1
+   thoả m >= startMonth, tức không hoạt động, không cần xử lý riêng). DEFAULTS
+   cũ thiếu field này (rawValue = undefined) cũng rơi vào nhánh dùng mặc định. */
+function resolveStartMonth(rawValue, fallback) {
+  if (rawValue === undefined || rawValue === null || rawValue === "") return fallback;
+  const n = Number(rawValue);
+  if (!Number.isFinite(n) || n === 0) return fallback;
+  if (n < 1) return 1;
+  return Math.round(n);
 }
 
-/* Doanh thu/chi phí dịch vụ seller — ỔN ĐỊNH mỗi tháng (không tăng trưởng
-   theo tháng, hoạt động đều từ Tháng 1), nên chỉ cần tính 1 LẦN, không phụ
-   thuộc m. Vẫn áp điều chỉnh kịch bản (adj) như mảng chính, để kịch bản
-   Conservative/Optimistic phản ánh đúng toàn bộ business chứ không chỉ
-   mảng tự bán hàng. */
-function computeSellerMonthlyAggregate(s, adj, sharedCostPct) {
+/* Đơn/ngày RAW (trước điều chỉnh kịch bản) cho 1 tháng tuyệt đối (1-12).
+   CR-01: tháng bắt đầu tự bán (`volume.startMonth`, mặc định 2) do anh Hiếu
+   chọn tự do — trước đó (tháng dựng hạ tầng) luôn = 0. Từ tháng bắt đầu trở
+   đi = baseline, các tháng sau đó tăng trưởng theo bậc (monthlyGrowthPct). */
+function computeRawOrdersPerDay(s, month) {
+  const startMonth = resolveStartMonth(s.volume.startMonth, 2);
+  if (month < startMonth) return 0;
+  const base = Number(s.volume.baselineOrdersPerDay || 0);
+  const g = Number(s.volume.monthlyGrowthPct || 0) / 100;
+  return base * Math.pow(1 + g, month - startMonth);
+}
+
+/* Doanh thu/chi phí dịch vụ seller cho 1 tháng cụ thể (`month`). CR-01: mỗi
+   seller có tháng bắt đầu riêng (`sel.startMonth`, mặc định 1) — trước
+   `sel.startMonth` seller đó chưa hoạt động (đóng góp 0). Từ tháng bắt đầu
+   trở đi, mỗi seller vẫn ỔN ĐỊNH (không tăng trưởng theo tháng). Vẫn áp điều
+   chỉnh kịch bản (adj) như mảng chính, để kịch bản Conservative/Optimistic
+   phản ánh đúng toàn bộ business chứ không chỉ mảng tự bán hàng. */
+function computeSellerMonthlyAggregate(s, adj, sharedCostPct, month) {
   const sellers = (s.sellerService && s.sellerService.sellers) || [];
   const feePct = Number((s.sellerService && s.sellerService.feePct) || 0);
   let revenue = 0;
   let cogsCost = 0;
   sellers.forEach(sel => {
+    const startMonth = resolveStartMonth(sel.startMonth, 1);
+    if (month < startMonth) return; // seller này chưa vào — đóng góp 0 tháng này
     const opd = Math.max(0, Math.round(Number(sel.ordersPerDay || 0) * (1 + adj)));
     const rev = opd * DAYS_PER_MONTH * Number(sel.aov || 0);
     revenue += rev;
@@ -265,13 +306,11 @@ function computeSellerMonthlyAggregate(s, adj, sharedCostPct) {
 function calcModel(s, scenarioKey) {
   const adj = scenarioAdjustment(s, scenarioKey);
   const fixedOverheadMonthly = s.fixedOverhead.reduce((sum, r) => sum + Number(r.amount || 0), 0);
-  const headcountMonthly = s.headcount.reduce((sum, r) => sum + Number(r.count || 0) * Number(r.monthlyRate || 0), 0);
   const totalInvestment = (s.capital.shareholders || []).reduce((sum, r) => sum + Number(r.contribution || 0), 0);
   const variableCostPctTotal = (s.variableCosts || []).reduce((sum, r) => sum + Number(r.pct || 0), 0);
   // Chỉ các dòng KHÔNG tick "chỉ ảnh hưởng đến mình" (ownOnly=false) mới áp
   // dụng chung lên doanh thu seller — vd phí thanh toán, hoàn/huỷ đơn.
   const sharedVariableCostPctTotal = (s.variableCosts || []).reduce((sum, r) => sum + (r.ownOnly ? 0 : Number(r.pct || 0)), 0);
-  const sellerAgg = computeSellerMonthlyAggregate(s, adj, sharedVariableCostPctTotal);
 
   // Độ trễ vòng quay vốn, quy đổi ra số tháng nguyên gần nhất (model chạy
   // theo block tháng, không theo ngày thật) — mặc định 30 ngày = 1 tháng.
@@ -279,6 +318,7 @@ function calcModel(s, scenarioKey) {
 
   const months = [];
   const revenueByMonth = {}; // m -> revenue, tra cứu lại khi tính tiền "về" TK chung
+  const sellerAggByMonth = {}; // m -> {revenue,cogsCost,sharedCost,feeRevenue,netRemit}, tra cứu lại khi tính tiền seller "về" TK chung
   let cashBalance = 0;
   let cashBalanceNoFunding = 0; // dòng tiền nếu KHÔNG góp vốn ban đầu — để lộ ra nhu cầu vốn thật
   let minCashNoFunding = 0;
@@ -290,7 +330,8 @@ function calcModel(s, scenarioKey) {
   for (let m = 1; m <= MONTHS_PER_YEAR; m++) {
     const rawOpd = computeRawOrdersPerDay(s, m);
     // Đơn/ngày luôn là số nguyên (đếm đơn hàng thật) — làm tròn 1 lần ở đây.
-    const ordersPerDay = m <= 1 ? 0 : Math.max(0, Math.round(rawOpd * (1 + adj)));
+    // (Tháng trước `volume.startMonth` đã = 0 sẵn từ computeRawOrdersPerDay.)
+    const ordersPerDay = Math.max(0, Math.round(rawOpd * (1 + adj)));
     const orders = ordersPerDay * DAYS_PER_MONTH;
     const revenue = orders * Number(s.revenue.aov || 0);
     revenueByMonth[m] = revenue;
@@ -299,6 +340,19 @@ function calcModel(s, scenarioKey) {
     const grossProfit = revenue - variableCost;
 
     const oneTimeSetup = s.oneTimeSetup.reduce((sum, item) => sum + (Number(item.month) === m ? Number(item.amount || 0) : 0), 0);
+
+    // CR-01: nhân sự — mỗi dòng có tháng bắt đầu riêng (`row.startMonth`,
+    // mặc định 1) — chỉ cộng vào chi phí tháng nào dòng đó đã "vào làm".
+    const headcountMonthly = s.headcount.reduce((sum, r) => {
+      const rowStart = resolveStartMonth(r.startMonth, 1);
+      if (m < rowStart) return sum;
+      return sum + Number(r.count || 0) * Number(r.monthlyRate || 0);
+    }, 0);
+
+    // CR-01: doanh thu/chi phí seller tính THEO THÁNG (mỗi seller có
+    // startMonth riêng) — không còn 1 số cố định cho cả năm.
+    const sellerAgg = computeSellerMonthlyAggregate(s, adj, sharedVariableCostPctTotal, m);
+    sellerAggByMonth[m] = sellerAgg;
 
     // EBITDA / Net income: LUÔN dồn tích (accrual) — ghi nhận theo tháng phát
     // sinh, KHÔNG phụ thuộc độ trễ chuyển tiền. Đây là số dùng cho P&L và
@@ -313,10 +367,14 @@ function calcModel(s, scenarioKey) {
     // phải trả ngay trong tháng phát sinh; tiền VÀO chỉ dùng được từ doanh
     // thu của `delayMonths` tháng trước (đã kịp "về" TK chung) — áp dụng cho
     // CẢ doanh thu của mình lẫn doanh thu seller (cùng 1 cổng thanh toán,
-    // cùng độ trễ). Doanh thu/net-remit seller ỔN ĐỊNH mỗi tháng nên tra cứu
-    // lại tháng trước = chính nó (không cần mảng lookback riêng như revenue).
+    // cùng độ trễ). CR-01: doanh thu seller giờ tính theo tháng (có thể = 0
+    // trước `sel.startMonth`, hoặc thay đổi khi thêm/bớt seller theo tháng)
+    // nên phải tra đúng lịch sử tháng `m - delayMonths` qua `sellerAggByMonth`
+    // — giống hệt cách `revenueByMonth` làm cho mảng chính — thay vì coi
+    // seller "ổn định nên tháng trước = tháng này" như trước CR-01.
+    const sellerAggDelayed = m > delayMonths ? sellerAggByMonth[m - delayMonths] : null;
     const ownUsableRevenueCash = m > delayMonths ? (revenueByMonth[m - delayMonths] || 0) : 0;
-    const sellerUsableRevenueCash = m > delayMonths ? sellerAgg.revenue : 0;
+    const sellerUsableRevenueCash = sellerAggDelayed ? sellerAggDelayed.revenue : 0;
     const usableRevenueCash = ownUsableRevenueCash + sellerUsableRevenueCash;
     // COGS hộ seller: ứng trả NGAY khi phát sinh đơn (giống cách trả COGS của
     // mảng chính), KHÔNG chờ độ trễ. Net remit trả seller: CHỜ độ trễ y hệt
@@ -325,7 +383,7 @@ function calcModel(s, scenarioKey) {
     // Chi phí dùng chung (phí cổng thanh toán...) áp lên doanh thu seller —
     // mình trả/khấu trừ NGAY (giống COGS hộ seller), không chờ độ trễ.
     const sellerSharedCost = sellerAgg.sharedCost;
-    const sellerNetRemitPaid = m > delayMonths ? sellerAgg.netRemit : 0;
+    const sellerNetRemitPaid = sellerAggDelayed ? sellerAggDelayed.netRemit : 0;
     const cashOutflow = variableCost + fixedOverheadMonthly + headcountMonthly + oneTimeSetup + sellerCogsCost + sellerSharedCost + sellerNetRemitPaid;
     const netCashMovement = usableRevenueCash - cashOutflow;
 

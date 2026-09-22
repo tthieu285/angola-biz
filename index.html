@@ -103,14 +103,18 @@
         <h3>A. Volume & Tăng trưởng</h3>
         <div class="field-grid">
           <div class="field">
-            <label for="baselineOrdersPerDay">Baseline đơn/ngày (Tháng 2 — mốc validate)</label>
-            <input type="number" id="baselineOrdersPerDay" step="1">
-            <span class="field-note">Tháng 1 luôn = 0 đơn (tháng dựng hạ tầng: đăng ký công ty, mở tài khoản, dựng site).</span>
+            <label for="volumeStartMonth">Tháng bắt đầu tự bán hàng</label>
+            <input type="number" id="volumeStartMonth" step="1" min="1" max="12">
+            <span class="field-note">Trước tháng này là giai đoạn dựng hạ tầng (đăng ký công ty, mở tài khoản, dựng site) — 0 đơn hàng tự bán. Có thể dời muộn hơn nếu chạy dịch vụ seller trước (xem mục I). Để trống/0 → dùng mặc định Tháng 2; > 12 → không tự bán trong Năm 1.</span>
           </div>
           <div class="field">
-            <label for="monthlyGrowthPct">Tăng trưởng mỗi tháng (%), Tháng 3-12</label>
+            <label for="baselineOrdersPerDay">Baseline đơn/ngày (tháng bắt đầu tự bán)</label>
+            <input type="number" id="baselineOrdersPerDay" step="1">
+          </div>
+          <div class="field">
+            <label for="monthlyGrowthPct">Tăng trưởng mỗi tháng (%), tính từ tháng bắt đầu tự bán</label>
             <input type="number" id="monthlyGrowthPct" step="0.01">
-            <span class="field-note">Mặc định 25,89%/tháng để chạm đúng 200 đơn/ngày vào Tháng 12 từ baseline 20.</span>
+            <span class="field-note">Đơn/ngày = baseline đúng ở tháng bắt đầu, rồi tăng theo cấp số nhân mỗi tháng kế tiếp.</span>
           </div>
         </div>
         <div class="rev-boxes" id="volumeBoxes"></div>
@@ -191,6 +195,7 @@
               <th>Vai trò</th>
               <th class="col-count">Số lượng</th>
               <th class="col-rate">$/tháng</th>
+              <th class="col-month">Tháng bắt đầu</th>
               <th class="col-remove"></th>
             </tr>
           </thead>
@@ -198,7 +203,7 @@
         </table>
         <button class="add-row-btn" id="addHeadcountRow" type="button">+ Thêm vai trò</button>
         <span class="field-note">Mặc định RỖNG — Year 1 anh Hiếu và Tùng không nhận lương cố định, chỉ chia lợi nhuận cuối kỳ theo cổ phần (xem mục H). Thêm dòng ở đây nếu sau này cần thuê ngoài (CSKH, quản lý ads...).</span>
-        <div class="mix-total-row">Tổng chi phí nhân sự/tháng: <span id="headcountTotalDisplay">—</span></div>
+        <div class="mix-total-row">Tổng chi phí nhân sự/tháng (khi đủ người): <span id="headcountTotalDisplay">—</span></div>
       </div>
 
       <!-- G. Cash conversion cycle -->
@@ -254,6 +259,7 @@
               <th class="col-count">Đơn/ngày (ước tính)</th>
               <th class="col-rate">AOV ($/đơn)</th>
               <th class="col-count">% nhập hàng (COGS)</th>
+              <th class="col-month">Tháng bắt đầu</th>
               <th class="col-remove"></th>
             </tr>
           </thead>
@@ -261,7 +267,7 @@
         </table>
         <button class="add-row-btn" id="addSellerRow" type="button">+ Thêm seller</button>
         <div class="mix-total-row" id="sellerTotalRow">—</div>
-        <span class="field-note">Cơ chế: mình thu hộ TOÀN BỘ doanh thu của seller qua cùng cổng thanh toán (cùng chịu độ trễ ~vòng quay vốn ở mục G), dùng tiền đó ứng trả nhập hàng NGAY khi phát sinh đơn, trừ phí dịch vụ (thu nhập của mình, cộng vào EBITDA), rồi chuyển phần còn lại về cho seller bằng tiền Việt Nam — seller cũng chờ cùng độ trễ đó mới nhận được tiền. Tiền giữ hộ seller trong lúc chờ tạo ra khoản "Nợ phải trả" trên Balance Sheet. Seller giả định hoạt động ổn định (KHÔNG tăng trưởng theo tháng) ngay từ Tháng 1 — sớm hơn mảng tự bán hàng của mình (bắt đầu Tháng 2). Mỗi seller có AOV + % nhập hàng riêng vì có thể bán sản phẩm khác nhau. Mặc định rỗng — anh Hiếu tự thêm seller thật khi có (dự kiến tối đa ~3 seller).</span>
+        <span class="field-note">Cơ chế: mình thu hộ TOÀN BỘ doanh thu của seller qua cùng cổng thanh toán (cùng chịu độ trễ ~vòng quay vốn ở mục G), dùng tiền đó ứng trả nhập hàng NGAY khi phát sinh đơn, trừ phí dịch vụ (thu nhập của mình, cộng vào EBITDA), rồi chuyển phần còn lại về cho seller bằng tiền Việt Nam — seller cũng chờ cùng độ trễ đó mới nhận được tiền. Tiền giữ hộ seller trong lúc chờ tạo ra khoản "Nợ phải trả" trên Balance Sheet. Mỗi seller có AOV + % nhập hàng riêng (có thể bán sản phẩm khác nhau) và tháng bắt đầu riêng — trước tháng đó seller chưa đóng góp doanh thu/chi phí gì; từ tháng bắt đầu trở đi seller đó hoạt động ổn định (không tăng trưởng theo tháng). Các seller có thể vào nền tảng ở các tháng khác nhau. Hiện đã có 1 seller thật ("Hải béo"), dự kiến tối đa ~3 seller.</span>
       </div>
 
       <!-- J. Scenario -->

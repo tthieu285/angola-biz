@@ -90,6 +90,7 @@ const PIE_OVERFLOW_COLOR = "#898781";
    Nên binding ở đây không cần nhân/chia 100 như model God's Eyes cũ.
    --------------------------------------------------------------------------- */
 const SIMPLE_FIELDS = [
+  { id: "volumeStartMonth", path: "volume.startMonth" },
   { id: "baselineOrdersPerDay", path: "volume.baselineOrdersPerDay" },
   { id: "monthlyGrowthPct", path: "volume.monthlyGrowthPct" },
   { id: "aov", path: "revenue.aov" },
@@ -157,6 +158,7 @@ function renderHeadcountRows() {
       <td><input type="text" data-list="headcount" data-index="${i}" data-field="role" value="${escapeHtml(row.role)}"></td>
       <td class="col-count"><input type="number" step="1" data-list="headcount" data-index="${i}" data-field="count" value="${roundForInput(row.count)}"></td>
       <td class="col-rate"><input type="number" step="10" data-list="headcount" data-index="${i}" data-field="monthlyRate" value="${roundForInput(row.monthlyRate)}"></td>
+      <td class="col-month"><input type="number" step="1" min="1" max="12" data-list="headcount" data-index="${i}" data-field="startMonth" value="${roundForInput(row.startMonth || 1)}"></td>
       <td class="col-remove"><button class="row-remove-btn" data-remove="headcount" data-index="${i}" type="button" title="Xoá dòng">✕</button></td>
     </tr>
   `).join("");
@@ -197,6 +199,7 @@ function renderSellerRows() {
       <td class="col-count"><input type="number" step="1" data-list="sellers" data-index="${i}" data-field="ordersPerDay" value="${roundForInput(row.ordersPerDay)}"></td>
       <td class="col-rate"><input type="number" step="1" data-list="sellers" data-index="${i}" data-field="aov" value="${roundForInput(row.aov)}"></td>
       <td class="col-count"><input type="number" step="0.5" data-list="sellers" data-index="${i}" data-field="cogsPct" value="${roundForInput(row.cogsPct)}"></td>
+      <td class="col-month"><input type="number" step="1" min="1" max="12" data-list="sellers" data-index="${i}" data-field="startMonth" value="${roundForInput(row.startMonth || 1)}"></td>
       <td class="col-remove"><button class="row-remove-btn" data-remove="sellers" data-index="${i}" type="button" title="Xoá dòng">✕</button></td>
     </tr>
   `).join("");
@@ -265,7 +268,7 @@ function bindDynamicTableEvents() {
     recalcAndRender();
   });
   document.getElementById("addHeadcountRow").addEventListener("click", () => {
-    state.headcount.push({ role: "Vai trò mới", count: 1, monthlyRate: 0 });
+    state.headcount.push({ role: "Vai trò mới", count: 1, monthlyRate: 0, startMonth: 1 });
     renderHeadcountRows();
     recalcAndRender();
   });
@@ -280,7 +283,7 @@ function bindDynamicTableEvents() {
     recalcAndRender();
   });
   document.getElementById("addSellerRow").addEventListener("click", () => {
-    state.sellerService.sellers.push({ name: "Seller mới", ordersPerDay: 0, aov: 30, cogsPct: 25 });
+    state.sellerService.sellers.push({ name: "Seller mới", ordersPerDay: 0, aov: 30, cogsPct: 25, startMonth: 1 });
     renderSellerRows();
     recalcAndRender();
   });
@@ -333,16 +336,23 @@ function updateSellerTotalsDisplay() {
   const feeRevenue = revenue * feePct / 100;
   const sharedCost = revenue * sharedPct / 100;
   const netRemit = revenue - cogsCost - sharedCost - feeRevenue;
-  el.textContent = `Ước tính/tháng (kịch bản Base, chưa tính độ trễ chuyển tiền): Doanh thu seller ${formatMoney(revenue)} — Phí dịch vụ (thu nhập của mình) ${formatMoney(feeRevenue)} — Ứng trả nhập hàng hộ ${formatMoney(cogsCost)} — Chi phí dùng chung (${sharedPct.toFixed(1)}%) ${formatMoney(sharedCost)} — Chuyển về seller ${formatMoney(netRemit)}`;
+  el.textContent = `Ước tính/tháng khi tất cả seller đã hoạt động (kịch bản Base, chưa tính độ trễ chuyển tiền): Doanh thu seller ${formatMoney(revenue)} — Phí dịch vụ (thu nhập của mình) ${formatMoney(feeRevenue)} — Ứng trả nhập hàng hộ ${formatMoney(cogsCost)} — Chi phí dùng chung (${sharedPct.toFixed(1)}%) ${formatMoney(sharedCost)} — Chuyển về seller ${formatMoney(netRemit)}`;
 }
 
 function renderVolumeBoxes(model) {
   const el = document.getElementById("volumeBoxes");
   if (!el) return;
+  // CR-01: tháng bắt đầu tự bán hàng giờ tuỳ chỉnh (`volume.startMonth`) —
+  // không còn cố định Tháng 2. Nếu > 12 (không hoạt động trong Năm 1), hiện
+  // nhãn "Chưa tự bán trong Năm 1" thay vì đọc mảng months[] ngoài phạm vi.
+  const startMonth = resolveStartMonth(state.volume.startMonth, 2);
+  const startMonthActive = startMonth >= 1 && startMonth <= MONTHS_PER_YEAR;
+  const baselineLabel = startMonthActive ? `Đơn/ngày — Tháng ${startMonth} (baseline)` : "Đơn/ngày — Baseline";
+  const baselineValue = startMonthActive ? fmtNum(model.months[startMonth - 1].ordersPerDay, 0) : "Chưa tự bán trong Năm 1";
   el.innerHTML = `
     <div class="rev-box">
-      <div class="label">Đơn/ngày — Tháng 2 (baseline)</div>
-      <div class="value">${fmtNum(model.months[1].ordersPerDay, 0)}</div>
+      <div class="label">${baselineLabel}</div>
+      <div class="value">${baselineValue}</div>
     </div>
     <div class="rev-box">
       <div class="label">Đơn/ngày — Tháng 12 (cuối năm)</div>
@@ -380,7 +390,11 @@ function renderKPIs(model) {
     <div class="kpi-card">
       <div class="kpi-label">Đơn/ngày — Tháng 12</div>
       <div class="kpi-value">${fmtNum(model.endOrdersPerDay, 0)}</div>
-      <div class="kpi-sub">Baseline Tháng 2: ${fmtNum(model.months[1].ordersPerDay, 0)} đơn/ngày</div>
+      <div class="kpi-sub">${(() => {
+        const startMonth = resolveStartMonth(state.volume.startMonth, 2);
+        if (startMonth < 1 || startMonth > MONTHS_PER_YEAR) return "Chưa tự bán trong Năm 1";
+        return `Baseline Tháng ${startMonth}: ${fmtNum(model.months[startMonth - 1].ordersPerDay, 0)} đơn/ngày`;
+      })()}</div>
     </div>
     <div class="kpi-card">
       <div class="kpi-label">Tiền mặt cuối Năm 1</div>
